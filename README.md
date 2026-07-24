@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="./docs/brand/banner.jpg" alt="OpenSession — Preserve. Share. Build. Together." width="100%">
+</p>
+
 # OpenSession
 
 **A visualizer and social layer for [Open Session License](./OPEN-SESSION-LICENSE.md) artifacts** — the append-only `llm-turn-history.jsonl` session logs that open-session repos ship alongside their code.

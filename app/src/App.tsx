@@ -67,6 +67,7 @@ export default function App() {
       <header className="masthead">
         <div className="masthead-inner">
           <h1 onClick={() => setView({ name: 'feed' })}>
+            <img src="/icon.png" alt="" className="mark" />
             open<span className="accent">session</span>
           </h1>
           <p className="tagline">

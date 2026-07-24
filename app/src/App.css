@@ -24,6 +24,15 @@
   color: var(--text-h);
   cursor: pointer;
   user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.masthead h1 .mark {
+  width: 40px;
+  height: 40px;
+  border-radius: 9px;
 }
 
 .masthead h1 .accent {
