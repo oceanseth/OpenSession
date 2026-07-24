@@ -1,0 +1,47 @@
+name: Deploy to opensession.groupnetwork.com
+
+on:
+  push:
+    branches: [production]
+
+permissions:
+  id-token: write # OIDC → arn:aws:iam::218827615080:role/opensession-deploy
+  contents: read
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - run: npm ci
+      - run: npx vitest run
+      - run: npm run build
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::218827615080:role/opensession-deploy
+          aws-region: us-east-1
+
+      - name: Sync to S3
+        run: |
+          aws s3 sync dist/ s3://opensession.groupnetwork.com/ --delete \
+            --cache-control "public,max-age=31536000,immutable" --exclude index.html
+          aws s3 cp dist/index.html s3://opensession.groupnetwork.com/index.html \
+            --cache-control "public,max-age=60,must-revalidate"
+
+      - name: Invalidate CloudFront
+        run: aws cloudfront create-invalidation --distribution-id E1ECGJB4KUGGL5 --paths "/index.html" "/"

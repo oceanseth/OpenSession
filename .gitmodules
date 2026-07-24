@@ -1,0 +1,3 @@
+[submodule "xChatHub"]
+	path = xChatHub
+	url = https://github.com/oceanseth/xChatHub

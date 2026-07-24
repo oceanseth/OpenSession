@@ -1,0 +1,357 @@
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* ── masthead ─────────────────────────────────────────── */
+
+.masthead {
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, #10141d 0%, var(--bg) 100%);
+}
+
+.masthead-inner {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 2.5rem 1.25rem 1.75rem;
+}
+
+.masthead h1 {
+  margin: 0;
+  font-size: 2rem;
+  letter-spacing: -0.02em;
+  color: var(--text-h);
+  cursor: pointer;
+  user-select: none;
+}
+
+.masthead h1 .accent {
+  color: var(--accent);
+}
+
+.tagline {
+  max-width: 620px;
+  margin: 0.5rem 0 1rem;
+  color: var(--text-dim);
+}
+
+.masthead nav {
+  display: flex;
+  gap: 1.25rem;
+  font-size: 0.9rem;
+}
+
+/* ── layout ───────────────────────────────────────────── */
+
+main {
+  flex: 1;
+  width: 100%;
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 3rem;
+}
+
+footer {
+  border-top: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  text-align: center;
+  padding: 1rem 1.25rem 2rem;
+}
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.status {
+  color: var(--text-dim);
+  font-size: 0.92rem;
+}
+
+.status.error {
+  color: var(--danger);
+}
+
+/* ── feed ─────────────────────────────────────────────── */
+
+.connect {
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.connect-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.connect-row label {
+  font-size: 0.95rem;
+}
+
+.token-entry {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.token-entry input {
+  flex: 1;
+}
+
+.fine {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+
+.feed-list {
+  list-style: none;
+  margin: 0 0 1.25rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.feed-list .card.changed {
+  border-color: var(--accent-dim);
+  box-shadow: 0 0 0 1px var(--accent-dim);
+}
+
+.feed-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  color: var(--text);
+  padding: 1rem 1.25rem;
+  border-radius: 10px;
+  font-weight: 400;
+}
+
+.feed-item:hover {
+  background: var(--bg-card-hover);
+}
+
+.feed-item-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.repo-name {
+  color: var(--text-h);
+  font-weight: 600;
+}
+
+.badge {
+  background: var(--accent);
+  color: #06231a;
+  font-size: 0.72rem;
+  font-weight: 700;
+  border-radius: 99px;
+  padding: 0.1em 0.6em;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.size {
+  margin-left: auto;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+
+.desc {
+  margin: 0.35rem 0 0;
+  font-size: 0.9rem;
+  color: var(--text-dim);
+}
+
+.last-commit {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0.5rem 0 0;
+  font-size: 0.82rem;
+  color: var(--text-dim);
+}
+
+.last-commit img {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+}
+
+.open-by-url {
+  padding: 1rem 1.25rem;
+}
+
+.open-by-url label {
+  display: block;
+  margin-bottom: 0.6rem;
+  font-size: 0.95rem;
+}
+
+/* ── session view ─────────────────────────────────────── */
+
+.session-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.session-toolbar h2 {
+  margin: 0;
+  font-size: 1.15rem;
+  color: var(--text-h);
+}
+
+.source-link {
+  margin-left: auto;
+  font-size: 0.85rem;
+}
+
+.preface {
+  font-style: italic;
+  color: var(--text-dim);
+  font-size: 0.88rem;
+  margin: 0 0 1rem;
+}
+
+.session {
+  padding: 1.1rem 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.session-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.session-date {
+  font-weight: 700;
+  color: var(--text-h);
+}
+
+.session-tool {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  padding: 0.05em 0.6em;
+}
+
+.speakers {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.speaker-chip {
+  font-size: 0.78rem;
+  border-radius: 99px;
+  padding: 0.1em 0.65em;
+  border: 1px solid;
+}
+
+.speaker-chip.human {
+  color: var(--human);
+  border-color: var(--human);
+}
+
+.speaker-chip.model {
+  color: var(--model);
+  border-color: var(--model);
+}
+
+.identities {
+  margin: 0.6rem 0 0;
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.identity-chip {
+  font-size: 0.75rem;
+  color: var(--accent);
+  border: 1px dashed var(--accent-dim);
+  border-radius: 6px;
+  padding: 0.1em 0.55em;
+  cursor: help;
+}
+
+.turns {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding-top: 1rem;
+}
+
+.turn {
+  border-left: 3px solid;
+  padding: 0.15rem 0 0.15rem 0.9rem;
+}
+
+.turn.human {
+  border-color: var(--human);
+}
+
+.turn.model {
+  border-color: var(--model);
+}
+
+.turn-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  font-size: 0.8rem;
+  margin-bottom: 0.25rem;
+}
+
+.turn-speaker {
+  font-weight: 700;
+  color: var(--text-h);
+}
+
+.turn-meta time {
+  color: var(--text-dim);
+}
+
+.turn-body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.94rem;
+}
+
+.turn-tools {
+  margin-top: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+.expand {
+  margin-top: 0.4rem;
+  font-size: 0.78rem;
+  padding: 0.25em 0.7em;
+}
+
+@media (max-width: 600px) {
+  .size {
+    margin-left: 0;
+  }
+
+  .speakers {
+    margin-left: 0;
+  }
+}
