@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { OAUTH_CLIENT_ID, beginLogin } from '../lib/auth';
 import {
   GitHubClient,
   HISTORY_FILE,
@@ -103,32 +104,43 @@ export function Feed({ client, token, onToken, onOpenSession, onOpenUrl, loadErr
             </button>
           </div>
         ) : (
-          <form
-            className="connect-row"
-            onSubmit={(e) => {
-              e.preventDefault();
-              onToken(tokenInput.trim());
-            }}
-          >
-            <label htmlFor="gh-token">
-              Connect GitHub to build your feed — paste a{' '}
-              <a href="https://github.com/settings/tokens?type=beta" target="_blank" rel="noreferrer">
-                personal access token
-              </a>{' '}
-              (read-only is fine; OAuth login is coming):
-            </label>
-            <div className="token-entry">
-              <input
-                id="gh-token"
-                type="password"
-                placeholder="github_pat_…"
-                value={tokenInput}
-                onChange={(e) => setTokenInput(e.target.value)}
-              />
-              <button type="submit" disabled={!tokenInput.trim()}>Connect</button>
-            </div>
-            <p className="fine">Stored only in this browser's localStorage; all API calls go straight to api.github.com.</p>
-          </form>
+          <div className="connect-row">
+            {OAUTH_CLIENT_ID && (
+              <div className="oauth-row">
+                <span>Connect GitHub to build your feed:</span>
+                <button onClick={() => beginLogin()}>Sign in with GitHub</button>
+              </div>
+            )}
+            <details className="pat-fallback" open={!OAUTH_CLIENT_ID}>
+              <summary>{OAUTH_CLIENT_ID ? 'Or use a personal access token' : 'Connect with a personal access token'}</summary>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  onToken(tokenInput.trim());
+                }}
+              >
+                <label htmlFor="gh-token">
+                  Paste a{' '}
+                  <a href="https://github.com/settings/tokens?type=beta" target="_blank" rel="noreferrer">
+                    personal access token
+                  </a>{' '}
+                  (read-only is fine):
+                </label>
+                <div className="token-entry">
+                  <input
+                    id="gh-token"
+                    type="password"
+                    placeholder="github_pat_…"
+                    value={tokenInput}
+                    onChange={(e) => setTokenInput(e.target.value)}
+                  />
+                  <button type="submit" disabled={!tokenInput.trim()}>Connect</button>
+                </div>
+              </form>
+            </details>
+            <p className="fine">Your token is stored only in this browser's localStorage; all API calls go straight to api.github.com.</p>
+            {loadError && <p className="status error">{loadError}</p>}
+          </div>
         )}
       </section>
 
@@ -176,7 +188,6 @@ export function Feed({ client, token, onToken, onOpenSession, onOpenUrl, loadErr
             />
             <button type="submit" disabled={!urlInput.trim()}>View</button>
           </div>
-          {loadError && <p className="status error">{loadError}</p>}
         </form>
       </section>
     </div>

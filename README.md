@@ -41,6 +41,30 @@ npm run build  # production build → dist/
 build → S3 (`opensession.groupnetwork.com`) → CloudFront (`E1ECGJB4KUGGL5`) invalidation.
 DNS is a Route53 alias on the `groupnetwork.com` zone.
 
+## GitHub OAuth
+
+Sign-in uses a GitHub OAuth App (web flow). The SPA redirects to GitHub, and the
+`opensession-auth` Lambda (behind API Gateway `r1q8b3li40`, endpoint
+`https://r1q8b3li40.execute-api.us-east-1.amazonaws.com/token`) exchanges the callback code
+for a token — the client secret never reaches the browser. The client ID is injected at build
+time via `VITE_OAUTH_CLIENT_ID` (repo Actions variable `OAUTH_CLIENT_ID`); when unset, the
+sign-in button is hidden and the personal-access-token flow still works.
+
+To (re)configure credentials:
+
+```bash
+# after creating the OAuth App at github.com/settings/applications/new
+# (callback URL: https://opensession.groupnetwork.com/)
+aws lambda update-function-configuration --function-name opensession-auth --region us-east-1 \
+  --environment "Variables={GH_CLIENT_ID=<id>,GH_CLIENT_SECRET=<secret>}"
+gh variable set OAUTH_CLIENT_ID -b <id> -R oceanseth/OpenSession
+```
+
+For local dev, the simplest path is the PAT flow (leave `VITE_OAUTH_CLIENT_ID` unset). Full
+OAuth locally needs a second OAuth App with callback `http://localhost:5173/` — its id goes in
+`app/.env.local`, and the Lambda's env must temporarily hold that app's id/secret, since it
+can only serve one OAuth App at a time.
+
 ## Status
 
 Early — the live feed and session visualizer are working (v0 is fully client-side against

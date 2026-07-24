@@ -30,6 +30,8 @@ jobs:
       - run: npm ci
       - run: npx vitest run
       - run: npm run build
+        env:
+          VITE_OAUTH_CLIENT_ID: ${{ vars.OAUTH_CLIENT_ID }}
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:

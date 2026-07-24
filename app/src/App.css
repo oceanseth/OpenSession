@@ -107,6 +107,26 @@ footer {
   color: var(--text-dim);
 }
 
+.oauth-row {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  flex-wrap: wrap;
+}
+
+.pat-fallback summary {
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+
+.pat-fallback form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+}
+
 .feed-list {
   list-style: none;
   margin: 0 0 1.25rem;

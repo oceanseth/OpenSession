@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import './App.css';
 import { Feed } from './components/Feed';
 import { SessionView } from './components/SessionView';
+import { completeLogin } from './lib/auth';
 import { GitHubClient } from './lib/github';
 import { parseOpenSessionJsonl, type ParsedArchive } from './lib/opensession';
 
@@ -50,6 +51,16 @@ export default function App() {
     const m = hash.match(/^#\/session\?src=(.+)$/);
     if (m) void openUrl(decodeURIComponent(m[1]));
   }, [openUrl]);
+
+  // OAuth callback: ?code=…&state=… → exchange for a token.
+  useEffect(() => {
+    completeLogin()
+      .then((t) => {
+        if (t) saveToken(t);
+      })
+      .catch((e) => setLoadError(e instanceof Error ? e.message : String(e)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="app">
