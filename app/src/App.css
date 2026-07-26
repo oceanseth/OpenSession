@@ -136,6 +136,41 @@ footer {
   margin-top: 0.6rem;
 }
 
+.section-title {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  margin: 1.5rem 0 0.6rem;
+}
+
+.feed-row {
+  display: flex;
+  align-items: stretch;
+}
+
+.feed-row .feed-item {
+  flex: 1;
+}
+
+.feed-row .unfollow,
+.feed-row .follow {
+  align-self: center;
+  margin-right: 0.9rem;
+  flex-shrink: 0;
+}
+
+.feed-row .unfollow {
+  border: none;
+  font-size: 0.9rem;
+  padding: 0.3em 0.6em;
+}
+
+button.ghost.inline {
+  padding: 0.1em 0.6em;
+  font-size: 0.85rem;
+}
+
 .feed-list {
   list-style: none;
   margin: 0 0 1.25rem;

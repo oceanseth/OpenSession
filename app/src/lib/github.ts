@@ -11,21 +11,13 @@ const API = 'https://api.github.com';
 export const HISTORY_FILE = 'llm-turn-history.jsonl';
 
 export interface Repo {
+  id: number; // GitHub numeric repo id — canonical key in the registry
   full_name: string; // "owner/name"
   description: string | null;
   default_branch: string;
   html_url: string;
   stargazers_count: number;
   pushed_at: string;
-}
-
-export interface SessionRepo {
-  repo: Repo;
-  /** Blob sha of the history file — changes whenever the file changes. */
-  historySha: string;
-  historySize: number;
-  rawUrl: string;
-  lastCommit?: HistoryCommit;
 }
 
 export interface HistoryCommit {
@@ -67,44 +59,31 @@ export class GitHubClient {
     return this.get('/user');
   }
 
-  async starredRepos(perPage = 100, maxPages = 3): Promise<Repo[]> {
-    const path = this.token ? '/user/starred' : null;
-    if (!path) return [];
-    const all: Repo[] = [];
-    for (let page = 1; page <= maxPages; page++) {
-      const batch = await this.get<Repo[]>(`${path}?per_page=${perPage}&page=${page}&sort=updated`);
-      all.push(...batch);
-      if (batch.length < perPage) break;
+  /**
+   * Fetch a window of the user's starred repos (newest stars first).
+   * Returns the repos plus whether more pages remain, so callers can offer
+   * "scan more" instead of walking tens of thousands of stars up front.
+   */
+  async starredRepos(startPage = 1, maxPages = 10, perPage = 100): Promise<{ repos: Repo[]; more: boolean }> {
+    if (!this.token) return { repos: [], more: false };
+    const repos: Repo[] = [];
+    for (let page = startPage; page < startPage + maxPages; page++) {
+      const batch = await this.get<Repo[]>(`/user/starred?per_page=${perPage}&page=${page}`);
+      repos.push(...batch);
+      if (batch.length < perPage) return { repos, more: false };
     }
-    return all;
+    return { repos, more: true };
   }
 
-  async starredReposOf(login: string, perPage = 100, maxPages = 3): Promise<Repo[]> {
-    const all: Repo[] = [];
-    for (let page = 1; page <= maxPages; page++) {
-      const batch = await this.get<Repo[]>(
-        `/users/${encodeURIComponent(login)}/starred?per_page=${perPage}&page=${page}&sort=updated`,
-      );
-      all.push(...batch);
-      if (batch.length < perPage) break;
-    }
-    return all;
-  }
-
-  /** Does this repo ship a session history? Returns feed metadata if so. */
-  async probeSessionFile(repo: Repo): Promise<SessionRepo | null> {
+  /** Live-probe a repo's history file on its default branch (sha changes = new turns). */
+  async probeHistory(fullName: string): Promise<{ sha: string; size: number } | null> {
     try {
-      const contents = await this.get<{ sha: string; size: number; download_url: string }>(
-        `/repos/${repo.full_name}/contents/${HISTORY_FILE}?ref=${encodeURIComponent(repo.default_branch)}`,
+      const contents = await this.get<{ sha: string; size: number }>(
+        `/repos/${fullName}/contents/${HISTORY_FILE}`,
       );
-      return {
-        repo,
-        historySha: contents.sha,
-        historySize: contents.size,
-        rawUrl: contents.download_url,
-      };
+      return { sha: contents.sha, size: contents.size };
     } catch {
-      return null; // 404 → repo doesn't carry a history file
+      return null; // 404 → file (or repo) gone
     }
   }
 
@@ -132,38 +111,11 @@ export class GitHubClient {
     };
   }
 
-  async fetchHistoryFile(fullName: string, branch: string): Promise<string> {
+  async fetchHistoryFile(fullName: string, branch = 'HEAD'): Promise<string> {
     const res = await fetch(
       `https://raw.githubusercontent.com/${fullName}/${encodeURIComponent(branch)}/${HISTORY_FILE}`,
     );
     if (!res.ok) throw new Error(`raw fetch ${res.status} for ${fullName}`);
     return res.text();
   }
-}
-
-/**
- * Scan starred repos for session files. Probes run in small batches to stay
- * inside rate limits; onProgress fires as each hit lands so the feed fills in
- * live rather than all at once.
- */
-export async function scanForSessionRepos(
-  client: GitHubClient,
-  repos: Repo[],
-  onProgress?: (found: SessionRepo, scanned: number, total: number) => void,
-): Promise<SessionRepo[]> {
-  const found: SessionRepo[] = [];
-  const BATCH = 10;
-  let scanned = 0;
-  for (let i = 0; i < repos.length; i += BATCH) {
-    const batch = repos.slice(i, i + BATCH);
-    const results = await Promise.all(batch.map((r) => client.probeSessionFile(r)));
-    scanned += batch.length;
-    for (const hit of results) {
-      if (hit) {
-        found.push(hit);
-        onProgress?.(hit, scanned, repos.length);
-      }
-    }
-  }
-  return found;
 }

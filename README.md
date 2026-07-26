@@ -69,11 +69,33 @@ OAuth locally needs a second OAuth App with callback `http://localhost:5173/` �
 `app/.env.local`, and the Lambda's env must temporarily hold that app's id/secret, since it
 can only serve one OAuth App at a time.
 
+## Registry & follows
+
+Discovery is backed by a hosted registry (`server/index.mjs` — the `opensession-api` Lambda on
+API Gateway `r1q8b3li40` under `/api`, DynamoDB `opensession-repos` / `opensession-follows` /
+`opensession-authcache`, SQS `opensession-verify`) so users never probe thousands of starred
+repos against GitHub themselves:
+
+- **Canonical key is the GitHub numeric repo id.** The registry caches which repos implement
+  the Open Session License; checks are **server-side** (a `HEAD` on the raw history file) and
+  **demand-driven** — repos are (re)verified only when users surface them, at most once daily
+  per repo (no global sweeps).
+- `POST /api/repos/match` — client sends its starred repos (`[{id, full_name}]`); server
+  returns the known implementers and queues unknown/stale ones for verification.
+- `POST /api/repos/submit` — follow any repo by `owner/name` or URL; resolved with the
+  caller's token, verified inline, auto-followed.
+- `GET/PUT/DELETE /api/follows…` — the user's curated follow list (following is opt-in per
+  repo, not forced for every starred match). Auth is the user's GitHub token, resolved to
+  their GitHub user id server-side (cached ~1h).
+
+The client scans stars in 1,000-repo windows (newest first, "scan more" for deeper history)
+and live-polls only *followed* repos for new turns.
+
 ## Status
 
-Early — the live feed and session visualizer are working (v0 is fully client-side against
-api.github.com with a personal access token). Next up: GitHub OAuth login, X identity linking
-via xChatHub attestation, discussion threads, and the evals pipeline.
+The live follow feed, starred-repo discovery via the shared registry, GitHub OAuth sign-in,
+and the session visualizer are working. Next up: X identity linking via xChatHub attestation,
+discussion threads, and the evals pipeline.
 
 ## License
 
