@@ -95,7 +95,8 @@ async function apiHandler(event) {
     if (followMatch && method === 'PUT') return putFollow(event, user, Number(followMatch[1]));
     if (followMatch && method === 'DELETE') return deleteFollow(user, Number(followMatch[1]));
 
-    return json(404, { error: 'not_found' });
+    // 400, not 404: CloudFront rewrites 404s to the SPA's index.html.
+    return json(400, { error: 'unknown_route' });
   } catch (e) {
     console.error(e);
     return json(500, { error: 'internal', error_description: String(e?.message ?? e) });
@@ -173,7 +174,7 @@ async function submitRepo(event, user) {
   const res = await fetch(`https://api.github.com/repos/${m[1]}/${m[2]}`, {
     headers: { Authorization: `Bearer ${user.token}`, Accept: 'application/vnd.github+json', 'User-Agent': 'opensession' },
   });
-  if (res.status === 404) return json(404, { error: 'not_found', error_description: 'no such repository' });
+  if (res.status === 404) return json(422, { error: 'not_found', error_description: 'no such repository' });
   if (!res.ok) return json(502, { error: 'github_error', error_description: `github returned ${res.status}` });
   const gh = await res.json();
 

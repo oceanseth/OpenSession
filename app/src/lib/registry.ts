@@ -4,7 +4,9 @@
  * server-verified at most once daily). Auth: the user's GitHub token.
  */
 
-const API = 'https://r1q8b3li40.execute-api.us-east-1.amazonaws.com/api';
+// Same-origin in production (served via a CloudFront /api/* behavior — no
+// CORS); direct to the gateway in local dev, which is CORS-allowlisted.
+const API = import.meta.env.DEV ? 'https://r1q8b3li40.execute-api.us-east-1.amazonaws.com/api' : '/api';
 
 export interface RegistryRepo {
   id: number;

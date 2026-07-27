@@ -10,7 +10,9 @@
 
 export const OAUTH_CLIENT_ID: string | undefined = import.meta.env.VITE_OAUTH_CLIENT_ID;
 
-export const TOKEN_ENDPOINT = 'https://r1q8b3li40.execute-api.us-east-1.amazonaws.com/token';
+export const TOKEN_ENDPOINT = import.meta.env.DEV
+  ? 'https://r1q8b3li40.execute-api.us-east-1.amazonaws.com/token'
+  : '/api/token';
 
 const STATE_KEY = 'opensession.oauth.state';
 
