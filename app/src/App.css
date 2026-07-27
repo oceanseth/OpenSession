@@ -223,6 +223,47 @@ button.ghost.inline {
   letter-spacing: 0.03em;
 }
 
+.badge.pending {
+  background: transparent;
+  color: var(--text-dim);
+  border: 1px dashed var(--border);
+}
+
+.badge.muted {
+  background: transparent;
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  font-weight: 500;
+}
+
+.star-browser {
+  padding: 1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.star-browser .feed-list {
+  margin: 0;
+}
+
+.star-browser .card {
+  background: var(--bg);
+}
+
+.star-search {
+  width: 100%;
+}
+
+.feed-item:disabled {
+  cursor: default;
+  opacity: 0.75;
+}
+
+.feed-item:disabled:hover {
+  background: transparent;
+}
+
 .size {
   margin-left: auto;
   font-size: 0.8rem;

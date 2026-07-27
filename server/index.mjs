@@ -153,6 +153,9 @@ async function matchRepos(event, user) {
 
   return json(200, {
     known: [...found.values()].filter((i) => i.status === 'active').map(publicRepo),
+    // Checked within the last day and found without the artifact — lets the
+    // client distinguish "no artifact" from "still being verified".
+    inactive: [...found.values()].filter((i) => i.status === 'no-license').map((i) => i.repoId),
     queued: toQueue.length,
   });
 }

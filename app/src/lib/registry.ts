@@ -19,6 +19,8 @@ export interface RegistryRepo {
 
 export interface MatchResult {
   known: RegistryRepo[];
+  /** Repo ids checked within the last day and found without the artifact. */
+  inactive: number[];
   queued: number;
 }
 
@@ -57,10 +59,11 @@ export class RegistryClient {
 
   /** Which of these repos are known license implementers? Queues the rest for verification. */
   async match(repos: { id: number; full_name: string }[]): Promise<MatchResult> {
-    const result: MatchResult = { known: [], queued: 0 };
+    const result: MatchResult = { known: [], inactive: [], queued: 0 };
     for (let i = 0; i < repos.length; i += 1000) {
       const batch = await this.call<MatchResult>('POST', '/repos/match', { repos: repos.slice(i, i + 1000) });
       result.known.push(...batch.known);
+      result.inactive.push(...(batch.inactive ?? []));
       result.queued += batch.queued;
     }
     return result;

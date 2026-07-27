@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { OAUTH_CLIENT_ID, beginLogin } from '../lib/auth';
 import { GitHubClient, type HistoryCommit, type Repo } from '../lib/github';
+import { fetchHistory, loadCache, saveCache } from '../lib/history-cache';
 import { RegistryClient, parseRepoInput, type RegistryRepo } from '../lib/registry';
 
 const POLL_MS = 60_000;
@@ -22,19 +23,26 @@ interface FollowLive {
   lastCommit?: HistoryCommit;
 }
 
+type StarState = 'active' | 'no-artifact' | 'verifying';
+
 export function Feed({ client, token, onToken, onOpenSession, onOpenUrl, loadError }: FeedProps) {
   const registry = useMemo(() => (token ? new RegistryClient(token) : null), [token]);
   const [login, setLogin] = useState<string>();
   const [follows, setFollows] = useState<RegistryRepo[]>([]);
   const [live, setLive] = useState<Record<number, FollowLive>>({});
-  const [discovered, setDiscovered] = useState<RegistryRepo[]>([]);
-  const [scan, setScan] = useState<{ scanned: number; queued: number; nextPage: number | null }>();
+  const [scanned, setScanned] = useState<Repo[]>([]);
+  const [active, setActive] = useState<Map<number, RegistryRepo>>(new Map());
+  const [inactive, setInactive] = useState<Set<number>>(new Set());
+  const [moreStars, setMoreStars] = useState(false);
+  const [search, setSearch] = useState('');
   const [status, setStatus] = useState<string>();
   const [submitInput, setSubmitInput] = useState('');
   const [submitStatus, setSubmitStatus] = useState<string>();
   const [urlInput, setUrlInput] = useState('');
   const [tokenInput, setTokenInput] = useState(token);
   const shaRef = useRef<Record<number, string>>({});
+  const scannedRef = useRef<Repo[]>([]);
+  const stateRef = useRef({ active: new Map<number, RegistryRepo>(), inactive: new Set<number>() });
 
   const refreshFollows = useCallback(async () => {
     if (!registry) return [] as RegistryRepo[];
@@ -76,6 +84,21 @@ export function Feed({ client, token, onToken, onOpenSession, onOpenUrl, loadErr
     [client],
   );
 
+  const mergeMatch = useCallback((result: { known: RegistryRepo[]; inactive: number[] }) => {
+    setActive((cur) => {
+      const next = new Map(cur);
+      for (const r of result.known) next.set(r.id, r);
+      stateRef.current.active = next;
+      return next;
+    });
+    setInactive((cur) => {
+      const next = new Set(cur);
+      for (const id of result.inactive) next.add(id);
+      stateRef.current.inactive = next;
+      return next;
+    });
+  }, []);
+
   /**
    * Scan a window of starred repos and intersect with the hosted registry —
    * one API call instead of probing every starred repo against GitHub.
@@ -86,23 +109,35 @@ export function Feed({ client, token, onToken, onOpenSession, onOpenUrl, loadErr
       setStatus(startPage === 1 ? 'Scanning your newest stars…' : 'Scanning more stars…');
       try {
         const { repos, more } = await client.starredRepos(startPage, SCAN_PAGES);
-        const result = await registry.match(repos.map((r: Repo) => ({ id: r.id, full_name: r.full_name })));
-        setDiscovered((cur) => {
+        setScanned((cur) => {
           const seen = new Set(cur.map((r) => r.id));
-          return [...cur, ...result.known.filter((r) => !seen.has(r.id))];
+          const next = [...cur, ...repos.filter((r) => !seen.has(r.id))];
+          scannedRef.current = next;
+          return next;
         });
-        setScan((cur) => ({
-          scanned: (startPage === 1 ? 0 : (cur?.scanned ?? 0)) + repos.length,
-          queued: (startPage === 1 ? 0 : (cur?.queued ?? 0)) + result.queued,
-          nextPage: more ? startPage + SCAN_PAGES : null,
-        }));
+        setMoreStars(more);
+        mergeMatch(await registry.match(repos.map((r: Repo) => ({ id: r.id, full_name: r.full_name }))));
         setStatus(undefined);
       } catch (e) {
         setStatus(e instanceof Error ? e.message : String(e));
       }
     },
-    [client, registry],
+    [client, registry, mergeMatch],
   );
+
+  /** Re-match repos still awaiting verification so worker results appear live. */
+  const rematchPending = useCallback(async () => {
+    if (!registry) return;
+    const pending = scannedRef.current
+      .filter((r) => !stateRef.current.active.has(r.id) && !stateRef.current.inactive.has(r.id))
+      .slice(0, 1000);
+    if (pending.length === 0) return;
+    try {
+      mergeMatch(await registry.match(pending.map((r) => ({ id: r.id, full_name: r.full_name }))));
+    } catch {
+      /* transient — next tick retries */
+    }
+  }, [registry, mergeMatch]);
 
   useEffect(() => {
     if (!token || !registry) return;
@@ -121,20 +156,27 @@ export function Feed({ client, token, onToken, onOpenSession, onOpenUrl, loadErr
     })();
     const id = setInterval(() => {
       void refreshFollows().then((list) => pollFollows(list));
+      void rematchPending();
     }, POLL_MS);
+    const fastRematch = setInterval(() => void rematchPending(), 15_000);
     return () => {
       cancelled = true;
       clearInterval(id);
+      clearInterval(fastRematch);
     };
-  }, [token, registry, client, refreshFollows, pollFollows, scanStars]);
+  }, [token, registry, client, refreshFollows, pollFollows, scanStars, rematchPending]);
 
+  /** Open a repo's history, transferring only appended bytes when cached. */
   const open = async (fullName: string, id?: number) => {
     setStatus(`Loading ${fullName}…`);
     try {
-      const text = await client.fetchHistoryFile(fullName);
+      const probe = await client.probeHistory(fullName);
+      if (!probe) throw new Error(`no ${'llm-turn-history.jsonl'} found in ${fullName}`);
+      const result = await fetchHistory(client, fullName, probe, loadCache(fullName));
+      saveCache(fullName, result.cached);
       if (id !== undefined) setLive((cur) => ({ ...cur, [id]: { ...cur[id], changed: false } }));
       setStatus(undefined);
-      onOpenSession(fullName, text, `https://github.com/${fullName}/blob/HEAD/llm-turn-history.jsonl`);
+      onOpenSession(fullName, result.cached.text, `https://github.com/${fullName}/blob/HEAD/llm-turn-history.jsonl`);
     } catch (e) {
       setStatus(e instanceof Error ? e.message : String(e));
     }
@@ -143,7 +185,6 @@ export function Feed({ client, token, onToken, onOpenSession, onOpenUrl, loadErr
   const follow = async (repo: RegistryRepo) => {
     if (!registry) return;
     await registry.follow(repo.id, repo.full_name);
-    setDiscovered((cur) => cur.filter((r) => r.id !== repo.id));
     const list = await refreshFollows();
     void pollFollows(list);
   };
@@ -174,7 +215,19 @@ export function Feed({ client, token, onToken, onOpenSession, onOpenUrl, loadErr
   };
 
   const followedIds = new Set(follows.map((f) => f.id));
-  const discoverList = discovered.filter((r) => !followedIds.has(r.id));
+  const starState = (r: Repo): StarState =>
+    active.has(r.id) ? 'active' : inactive.has(r.id) ? 'no-artifact' : 'verifying';
+  const pendingCount = scanned.filter((r) => starState(r) === 'verifying').length;
+  const q = search.trim().toLowerCase();
+  const browserRows: { repo: Repo; state: StarState }[] = (
+    q
+      ? scanned.filter((r) => r.full_name.toLowerCase().includes(q))
+      : scanned.filter((r) => active.has(r.id) && !followedIds.has(r.id))
+  ).map((r) => ({ repo: r, state: starState(r) }));
+  browserRows.sort((a, b) => {
+    const rank = (s: StarState) => (s === 'active' ? 0 : s === 'verifying' ? 1 : 2);
+    return rank(a.state) - rank(b.state) || a.repo.full_name.localeCompare(b.repo.full_name);
+  });
 
   return (
     <div className="feed">
@@ -190,8 +243,9 @@ export function Feed({ client, token, onToken, onOpenSession, onOpenUrl, loadErr
                 onToken('');
                 setLogin(undefined);
                 setFollows([]);
-                setDiscovered([]);
-                setScan(undefined);
+                setScanned([]);
+                setActive(new Map());
+                setInactive(new Set());
                 setTokenInput('');
               }}
             >
@@ -278,38 +332,63 @@ export function Feed({ client, token, onToken, onOpenSession, onOpenUrl, loadErr
           </ul>
 
           <h2 className="section-title">From your stars</h2>
-          {scan && (
+          <div className="star-browser card">
+            <input
+              className="star-search"
+              type="search"
+              placeholder={`Search your ${scanned.length.toLocaleString()} scanned starred repos…`}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
             <p className="status">
-              Scanned your {scan.scanned.toLocaleString()} newest starred repos against the registry
-              {scan.queued > 0 && <> · {scan.queued.toLocaleString()} first-time repos queued for server-side verification (check back soon)</>}
-              {scan.nextPage && (
+              {scanned.length.toLocaleString()} stars scanned · {active.size} with session history
+              {pendingCount > 0 && <> · {pendingCount.toLocaleString()} still verifying server-side</>}
+              {moreStars && (
                 <>
                   {' · '}
-                  <button className="ghost inline" onClick={() => void scanStars(scan.nextPage!)}>
+                  <button className="ghost inline" onClick={() => void scanStars(Math.floor(scanned.length / 100) + 1)}>
                     scan {SCAN_PAGES * 100} more
                   </button>
                 </>
               )}
             </p>
-          )}
-          {discoverList.length === 0 && scan && !scan.queued && (
-            <p className="status">No additional open-session repos among your scanned stars.</p>
-          )}
-          <ul className="feed-list">
-            {discoverList.map((r) => (
-              <li key={r.id} className="card">
-                <div className="feed-row">
-                  <button className="feed-item" onClick={() => void open(r.full_name)}>
-                    <div className="feed-item-head">
-                      <span className="repo-name">{r.full_name}</span>
-                      {r.history_size != null && <span className="size">{(r.history_size / 1024).toFixed(1)} KB of session history</span>}
-                    </div>
-                  </button>
-                  <button className="follow" onClick={() => void follow(r)}>Follow</button>
-                </div>
-              </li>
-            ))}
-          </ul>
+            {browserRows.length === 0 && (
+              <p className="status">
+                {q
+                  ? 'No scanned starred repos match that search.'
+                  : pendingCount > 0
+                    ? 'Nothing verified yet — first-time repos are being checked in the background; results appear here as they land.'
+                    : 'None of your scanned stars carry a session history that you aren’t already following. Search above to browse all of them, or add a repo by name below.'}
+              </p>
+            )}
+            <ul className="feed-list">
+              {browserRows.slice(0, 50).map(({ repo, state }) => (
+                <li key={repo.id} className="card">
+                  <div className="feed-row">
+                    <button
+                      className="feed-item"
+                      disabled={state !== 'active'}
+                      onClick={() => state === 'active' && void open(repo.full_name)}
+                    >
+                      <div className="feed-item-head">
+                        <span className="repo-name">{repo.full_name}</span>
+                        {state === 'active' && <span className="badge">open session</span>}
+                        {state === 'verifying' && <span className="badge pending">verifying…</span>}
+                        {state === 'no-artifact' && <span className="badge muted">no session artifact</span>}
+                      </div>
+                      {repo.description && <p className="desc">{repo.description}</p>}
+                    </button>
+                    {state === 'active' && !followedIds.has(repo.id) && (
+                      <button className="follow" onClick={() => void follow(active.get(repo.id)!)}>Follow</button>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+            {browserRows.length > 50 && (
+              <p className="status">Showing 50 of {browserRows.length.toLocaleString()} — refine the search to narrow down.</p>
+            )}
+          </div>
 
           <section className="card open-by-url">
             <form
