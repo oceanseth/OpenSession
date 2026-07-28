@@ -12,6 +12,7 @@ import {
   type Identity,
 } from './lib/identity';
 import { parseOpenSessionJsonl, type ParsedArchive } from './lib/opensession';
+import { XChatConnector } from './lib/xchat';
 
 type Tab = 'activity' | 'chat';
 type View = { name: 'tabs' } | { name: 'session'; title: string; archive: ParsedArchive; sourceUrl?: string };
@@ -33,6 +34,7 @@ export default function App() {
   );
   const client = useMemo(() => new GitHubClient(token || undefined), [token]);
   const identityClient = useMemo(() => (token ? new IdentityClient(token) : null), [token]);
+  const connector = useMemo(() => new XChatConnector(), []);
 
   const saveToken = (t: string) => {
     setToken(t);
@@ -60,11 +62,24 @@ export default function App() {
     const unsub = onExtensionAttestation((handle) => {
       void identityClient.linkX(handle, 'extension').then((i) => setIdentity(i));
     });
+    // Extension-grade attestation: when the xChatHub connector reaches an
+    // x.com tab, ask it which account is logged in and upgrade the link.
+    const unsubStatus = connector.onStatus((s) => {
+      if (!s.connected) return;
+      void connector
+        .whoami()
+        .then(({ handle }) => identityClient.linkX(handle, 'extension'))
+        .then((i) => setIdentity(i))
+        .catch(() => {
+          /* no x.com login or account switcher hidden — claimed flow still available */
+        });
+    });
     return () => {
       cancelled = true;
       unsub();
+      unsubStatus();
     };
-  }, [identityClient]);
+  }, [identityClient, connector]);
 
   const linkX = async () => {
     if (!identityClient) return;
@@ -212,7 +227,7 @@ export default function App() {
           />
         )}
         {view.name === 'tabs' && tab === 'chat' && token && (
-          <Chat client={client} token={token} myIdentity={identity} />
+          <Chat client={client} token={token} myIdentity={identity} connector={connector} />
         )}
         {view.name === 'session' && (
           <SessionView

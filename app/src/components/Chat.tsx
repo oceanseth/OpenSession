@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Contributor, GitHubClient } from '../lib/github';
 import { IdentityClient, type Identity } from '../lib/identity';
 import { RegistryClient } from '../lib/registry';
+import type { ConversationRow, DmMessage, XChatConnector, XChatStatus } from '../lib/xchat';
 
 const REFRESH_MS = 120_000;
+const THREAD_POLL_MS = 20_000;
 
 /** A contributor across followed repos, with their linked X identity (if any). */
 interface Person extends Contributor {
@@ -15,14 +17,18 @@ interface ChatProps {
   client: GitHubClient;
   token: string;
   myIdentity: Identity | null;
+  connector: XChatConnector;
 }
 
-export function Chat({ client, token, myIdentity }: ChatProps) {
+export function Chat({ client, token, myIdentity, connector }: ChatProps) {
   const registry = useMemo(() => new RegistryClient(token), [token]);
   const identityClient = useMemo(() => new IdentityClient(token), [token]);
   const [people, setPeople] = useState<Person[]>([]);
   const [selected, setSelected] = useState<number>();
   const [status, setStatus] = useState<string>('Loading contributors…');
+  const [xstatus, setXstatus] = useState<XChatStatus>(connector.status);
+
+  useEffect(() => connector.onStatus(setXstatus), [connector]);
 
   const load = useCallback(async () => {
     try {
@@ -54,7 +60,6 @@ export function Chat({ client, token, myIdentity }: ChatProps) {
       );
       const identities = await identityClient.resolve([...byId.keys()]);
       const list = [...byId.values()].map((p) => ({ ...p, identity: identities[p.id] }));
-      // Linked contributors first, then by recency of activity.
       list.sort((a, b) => (b.identity ? 1 : 0) - (a.identity ? 1 : 0) || b.lastActive.localeCompare(a.lastActive));
       setPeople(list);
       setStatus(list.length === 0 ? 'No contributors found on your followed repos yet.' : '');
@@ -76,7 +81,10 @@ export function Chat({ client, token, myIdentity }: ChatProps) {
       <aside className="chat-list card">
         <header className="chat-list-head">
           <span>Contributors</span>
-          <span className="fine">{people.filter((p) => p.identity).length} on X</span>
+          <span className="fine">
+            {people.filter((p) => p.identity).length} on X ·{' '}
+            {xstatus.connected ? 'DMs live' : xstatus.available ? 'open x.com for DMs' : 'extension not detected'}
+          </span>
         </header>
         {status && <p className="status chat-status">{status}</p>}
         <ul>
@@ -101,48 +109,10 @@ export function Chat({ client, token, myIdentity }: ChatProps) {
       </aside>
 
       <section className="chat-pane card">
-        {person ? (
-          <div className="chat-person">
-            <img className="chat-avatar" src={person.avatarUrl} alt="" />
-            <h3>
-              <a href={`https://github.com/${person.login}`} target="_blank" rel="noreferrer">{person.login}</a>
-              {person.identity && (
-                <>
-                  {' '}
-                  ·{' '}
-                  <a href={`https://x.com/${person.identity.x_handle}`} target="_blank" rel="noreferrer">
-                    @{person.identity.x_handle}
-                  </a>
-                </>
-              )}
-            </h3>
-            <p className="fine">
-              Active on {person.repos.join(', ')} · last append {new Date(person.lastActive).toLocaleDateString()}
-            </p>
-            {person.identity ? (
-              <>
-                <a
-                  className="dm-button"
-                  href={`https://x.com/${person.identity.x_handle}`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Message @{person.identity.x_handle} on X
-                </a>
-                <p className="fine">
-                  Opens their X profile — hit the DM button there. With the{' '}
-                  <a href="https://github.com/oceanseth/xChatHub" target="_blank" rel="noreferrer">xChatHub</a>{' '}
-                  extension installed, x.com messages become a keyboard-first, full-screen client.
-                  {person.identity.method === 'claimed' && ' (Handle is self-reported, not yet extension-verified.)'}
-                </p>
-              </>
-            ) : (
-              <p className="status">
-                {person.login} hasn't linked an X account on OpenSession yet — you can still reach them through their
-                GitHub profile.
-              </p>
-            )}
-          </div>
+        {person?.identity && xstatus.connected ? (
+          <ConversationPane key={person.id} connector={connector} handle={person.identity.x_handle} login={person.login} />
+        ) : person ? (
+          <PersonCard person={person} xstatus={xstatus} />
         ) : (
           <div className="chat-empty">
             <p>
@@ -150,13 +120,185 @@ export function Chat({ client, token, myIdentity }: ChatProps) {
                 ? `You're linked as @${myIdentity.x_handle}. Select a contributor to message them on X.`
                 : 'Select a contributor to see their linked X identity.'}
             </p>
-            <p className="fine">
-              In-page DMs (without leaving OpenSession) are coming via the xChatHub extension bridge — this tab will
-              become the conversation view.
-            </p>
+            {!xstatus.available && (
+              <p className="fine">
+                Install the{' '}
+                <a href="https://github.com/oceanseth/xChatHub" target="_blank" rel="noreferrer">xChatHub fork</a>{' '}
+                to read and send X DMs right here (your browser talks to x.com directly — messages never touch
+                OpenSession servers).
+              </p>
+            )}
+            {xstatus.available && !xstatus.connected && (
+              <p className="fine">
+                xChatHub detected — <a href="https://x.com" target="_blank" rel="noreferrer">open an x.com tab</a>{' '}
+                (keep its window visible) to light up in-page DMs.
+              </p>
+            )}
           </div>
         )}
       </section>
+    </div>
+  );
+}
+
+function PersonCard({ person, xstatus }: { person: Person; xstatus: XChatStatus }) {
+  return (
+    <div className="chat-person">
+      <img className="chat-avatar" src={person.avatarUrl} alt="" />
+      <h3>
+        <a href={`https://github.com/${person.login}`} target="_blank" rel="noreferrer">{person.login}</a>
+        {person.identity && (
+          <>
+            {' '}
+            ·{' '}
+            <a href={`https://x.com/${person.identity.x_handle}`} target="_blank" rel="noreferrer">
+              @{person.identity.x_handle}
+            </a>
+          </>
+        )}
+      </h3>
+      <p className="fine">
+        Active on {person.repos.join(', ')} · last append {new Date(person.lastActive).toLocaleDateString()}
+      </p>
+      {person.identity ? (
+        <>
+          <a className="dm-button" href={`https://x.com/${person.identity.x_handle}`} target="_blank" rel="noreferrer">
+            Message @{person.identity.x_handle} on X
+          </a>
+          <p className="fine">
+            {xstatus.available
+              ? 'Open an x.com tab (window visible) and this pane becomes a live DM thread.'
+              : 'Install the xChatHub fork to read and send DMs without leaving this page.'}
+          </p>
+        </>
+      ) : (
+        <p className="status">
+          {person.login} hasn't linked an X account on OpenSession yet — you can still reach them through their GitHub
+          profile.
+        </p>
+      )}
+    </div>
+  );
+}
+
+type ThreadState =
+  | { phase: 'searching' }
+  | { phase: 'none' }
+  | { phase: 'loaded'; conversationId: string; title: string | null; messages: DmMessage[] }
+  | { phase: 'error'; message: string };
+
+function ConversationPane({ connector, handle, login }: { connector: XChatConnector; handle: string; login: string }) {
+  const [thread, setThread] = useState<ThreadState>({ phase: 'searching' });
+  const [draft, setDraft] = useState('');
+  const [sending, setSending] = useState(false);
+  const convRef = useRef<string | undefined>(undefined);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const findAndRead = useCallback(async () => {
+    try {
+      let conversationId = convRef.current;
+      if (!conversationId) {
+        const rows = await connector.searchConversations(handle);
+        const needle = handle.toLowerCase();
+        const row = rows.find(
+          (r: ConversationRow) =>
+            r.title.toLowerCase().includes(needle) || r.details.some((d) => d.toLowerCase().includes(`@${needle}`)),
+        ) ?? rows[0];
+        if (!row) {
+          setThread({ phase: 'none' });
+          return;
+        }
+        conversationId = row.id;
+        convRef.current = row.id;
+      }
+      const r = await connector.readMessages(conversationId);
+      setThread({ phase: 'loaded', conversationId: r.conversationId, title: r.title, messages: r.messages });
+    } catch (e) {
+      setThread({ phase: 'error', message: e instanceof Error ? e.message : String(e) });
+    }
+  }, [connector, handle]);
+
+  useEffect(() => {
+    setThread({ phase: 'searching' });
+    convRef.current = undefined;
+    void findAndRead();
+    const id = setInterval(() => {
+      if (convRef.current) void findAndRead();
+    }, THREAD_POLL_MS);
+    return () => clearInterval(id);
+  }, [findAndRead]);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
+  }, [thread]);
+
+  const send = async () => {
+    const text = draft.trim();
+    if (!text || sending) return;
+    setSending(true);
+    try {
+      await connector.sendMessage(text, convRef.current);
+      setDraft('');
+      await findAndRead();
+    } catch (e) {
+      setThread({ phase: 'error', message: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="thread">
+      <header className="thread-head">
+        <span>
+          @{handle} <span className="fine">({login} on GitHub)</span>
+        </span>
+        <a href={`https://x.com/${handle}`} target="_blank" rel="noreferrer" className="fine">
+          open on X ↗
+        </a>
+      </header>
+
+      {thread.phase === 'searching' && <p className="status thread-status">Looking up your DM thread with @{handle}…</p>}
+      {thread.phase === 'none' && (
+        <p className="status thread-status">
+          No existing DM conversation with @{handle} —{' '}
+          <a href={`https://x.com/${handle}`} target="_blank" rel="noreferrer">start one on X</a> and it appears here.
+        </p>
+      )}
+      {thread.phase === 'error' && <p className="status error thread-status">{thread.message}</p>}
+
+      {thread.phase === 'loaded' && (
+        <div className="thread-messages" ref={scrollRef}>
+          {thread.messages.length === 0 && <p className="status">Thread is empty.</p>}
+          {thread.messages.map((m, i) => (
+            <div key={i} className={`bubble ${m.from}`}>
+              <span className="bubble-text">{m.text}</span>
+              {m.time && <span className="bubble-time">{m.time}</span>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <form
+        className="thread-composer"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void send();
+        }}
+      >
+        <input
+          placeholder={`Message @${handle}…`}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          disabled={sending || thread.phase === 'none'}
+        />
+        <button type="submit" disabled={sending || !draft.trim() || thread.phase === 'none'}>
+          {sending ? 'Sending…' : 'Send'}
+        </button>
+      </form>
+      <p className="fine thread-note">
+        Messages go through X's own client in your x.com tab — OpenSession servers never see them.
+      </p>
     </div>
   );
 }
