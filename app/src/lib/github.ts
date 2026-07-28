@@ -20,6 +20,14 @@ export interface Repo {
   pushed_at: string;
 }
 
+export interface Contributor {
+  id: number; // GitHub user id — the key identities are linked under
+  login: string;
+  avatarUrl: string;
+  lastActive: string; // ISO date of most recent history append
+  commits: number;
+}
+
 export interface HistoryCommit {
   sha: string;
   message: string;
@@ -109,6 +117,36 @@ export class GitHubClient {
       date: c.commit.author?.date ?? '',
       htmlUrl: c.html_url,
     };
+  }
+
+  /** Unique authors of commits touching the history file — the session's contributors. */
+  async historyContributors(fullName: string): Promise<Contributor[]> {
+    interface CommitEntry {
+      author: { id: number; login: string; avatar_url: string } | null;
+      commit: { author: { name: string; date: string } | null };
+    }
+    const commits = await this.get<CommitEntry[]>(
+      `/repos/${fullName}/commits?path=${HISTORY_FILE}&per_page=50`,
+    );
+    const byId = new Map<number, Contributor>();
+    for (const c of commits) {
+      if (!c.author) continue; // commit author has no GitHub account mapping
+      const cur = byId.get(c.author.id);
+      const date = c.commit.author?.date ?? '';
+      if (!cur) {
+        byId.set(c.author.id, {
+          id: c.author.id,
+          login: c.author.login,
+          avatarUrl: c.author.avatar_url,
+          lastActive: date,
+          commits: 1,
+        });
+      } else {
+        cur.commits += 1;
+        if (date > cur.lastActive) cur.lastActive = date;
+      }
+    }
+    return [...byId.values()];
   }
 
   async fetchHistoryFile(fullName: string, branch = 'HEAD'): Promise<string> {

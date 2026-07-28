@@ -25,7 +25,7 @@ import { createHash } from 'node:crypto';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const sqs = new SQSClient({});
-const { REPOS_TABLE, FOLLOWS_TABLE, AUTH_TABLE, QUEUE_URL } = process.env;
+const { REPOS_TABLE, FOLLOWS_TABLE, AUTH_TABLE, IDENTITIES_TABLE, QUEUE_URL } = process.env;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const HISTORY_FILE = 'llm-turn-history.jsonl';
@@ -88,6 +88,10 @@ async function apiHandler(event) {
     const user = await authenticate(event);
     if (!user) return json(401, { error: 'unauthorized', error_description: 'valid GitHub token required' });
 
+    if (method === 'GET' && path === '/api/identity') return getIdentity(user);
+    if (method === 'PUT' && path === '/api/identity/x') return putXIdentity(event, user);
+    if (method === 'DELETE' && path === '/api/identity/x') return deleteXIdentity(user);
+    if (method === 'POST' && path === '/api/identity/resolve') return resolveIdentities(event);
     if (method === 'POST' && path === '/api/repos/match') return matchRepos(event, user);
     if (method === 'POST' && path === '/api/repos/submit') return submitRepo(event, user);
     if (method === 'GET' && path === '/api/follows') return listFollows(user);
@@ -227,6 +231,65 @@ async function putFollow(event, user, repoId) {
 async function deleteFollow(user, repoId) {
   await ddb.send(new DeleteCommand({ TableName: FOLLOWS_TABLE, Key: { userId: user.userId, repoId } }));
   return json(200, { followed: false });
+}
+
+// ── identities (GitHub ⇄ X linking) ─────────────────────────────────
+
+const X_HANDLE_RE = /^@?([A-Za-z0-9_]{1,15})$/;
+/**
+ * Trust ladder for how an X handle was linked. 'claimed' is self-asserted in
+ * the web app; 'extension' means the xChatHub extension witnessed the handle
+ * logged in on x.com in the same browser. Higher methods must not be
+ * overwritten by lower ones.
+ */
+const METHOD_RANK = { claimed: 1, extension: 2 };
+
+const publicIdentity = (i) =>
+  i ? { github_id: i.userId, github_login: i.githubLogin, x_handle: i.xHandle, method: i.method, linked_at: i.linkedAt } : null;
+
+async function getIdentity(user) {
+  const item = (await ddb.send(new GetCommand({ TableName: IDENTITIES_TABLE, Key: { userId: user.userId } }))).Item;
+  return json(200, { identity: publicIdentity(item) });
+}
+
+async function putXIdentity(event, user) {
+  const body = parseBody(event);
+  const m = String(body?.handle ?? '').trim().match(X_HANDLE_RE);
+  if (!m) return json(400, { error: 'bad_request', error_description: 'handle must be a valid X username' });
+  const method = body?.method === 'extension' ? 'extension' : 'claimed';
+
+  const existing = (await ddb.send(new GetCommand({ TableName: IDENTITIES_TABLE, Key: { userId: user.userId } }))).Item;
+  if (existing && METHOD_RANK[existing.method] > METHOD_RANK[method] && existing.xHandle.toLowerCase() === m[1].toLowerCase()) {
+    return json(200, { identity: publicIdentity(existing) }); // keep the stronger attestation
+  }
+  const item = { userId: user.userId, githubLogin: user.login, xHandle: m[1], method, linkedAt: Date.now() };
+  await ddb.send(new PutCommand({ TableName: IDENTITIES_TABLE, Item: item }));
+  return json(200, { identity: publicIdentity(item) });
+}
+
+async function deleteXIdentity(user) {
+  await ddb.send(new DeleteCommand({ TableName: IDENTITIES_TABLE, Key: { userId: user.userId } }));
+  return json(200, { identity: null });
+}
+
+/**
+ * POST /api/identity/resolve  body: {github_ids: [numbers]}
+ * Maps GitHub user ids → linked X identities. Only linked users appear;
+ * linking is a public act in this system (that's its purpose).
+ */
+async function resolveIdentities(event) {
+  const ids = parseBody(event)?.github_ids;
+  if (!Array.isArray(ids) || ids.length > 500 || ids.some((i) => !Number.isInteger(i))) {
+    return json(400, { error: 'bad_request', error_description: 'github_ids must be an array of at most 500 integers' });
+  }
+  const identities = {};
+  for (const chunk of chunks([...new Set(ids)], 100)) {
+    const res = await ddb.send(new BatchGetCommand({
+      RequestItems: { [IDENTITIES_TABLE]: { Keys: chunk.map((userId) => ({ userId })) } },
+    }));
+    for (const item of res.Responses?.[IDENTITIES_TABLE] ?? []) identities[item.userId] = publicIdentity(item);
+  }
+  return json(200, { identities });
 }
 
 // ── helpers ─────────────────────────────────────────────────────────
