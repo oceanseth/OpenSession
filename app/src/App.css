@@ -357,6 +357,205 @@
   }
 }
 
+/* ── threads (Reddit layer) ───────────────────────────── */
+
+.thread-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.thread-item {
+  display: flex;
+  gap: 0.4rem;
+  padding: 0.9rem 1rem;
+}
+
+.vote-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  flex-shrink: 0;
+  width: 2.2rem;
+}
+
+.vote {
+  background: transparent;
+  color: var(--text-dim);
+  padding: 0 0.3em;
+  font-size: 0.85rem;
+  border: none;
+}
+
+.vote:hover {
+  color: var(--text-h);
+}
+
+.vote.active {
+  color: var(--accent);
+}
+
+.vote.active.down {
+  color: var(--danger);
+}
+
+.vote.mini {
+  font-size: 0.7rem;
+}
+
+.score {
+  font-weight: 700;
+  color: var(--text-h);
+  font-size: 0.9rem;
+}
+
+.score.mini {
+  font-size: 0.78rem;
+  margin: 0 0.15rem;
+}
+
+.thread-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.thread-title {
+  background: transparent;
+  border: none;
+  color: var(--text-h);
+  font-size: 1.05rem;
+  font-weight: 700;
+  padding: 0;
+  text-align: left;
+}
+
+.thread-title:hover {
+  color: var(--accent);
+}
+
+.thread-meta {
+  margin: 0.2rem 0 0;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+
+.turn-quote {
+  margin: 0.5rem 0 0;
+  padding: 0.3rem 0.8rem;
+  border-left: 3px solid var(--border);
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
+.thread-detail {
+  margin-top: 0.8rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.8rem;
+}
+
+.thread-description {
+  margin: 0 0 0.8rem;
+  white-space: pre-wrap;
+}
+
+.post-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.post.nested {
+  margin-left: 1.4rem;
+  border-left: 2px solid var(--border);
+  padding-left: 0.8rem;
+  margin-top: 0.6rem;
+}
+
+.post-head {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+}
+
+.post-author {
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.post-text {
+  margin: 0.25rem 0 0;
+  font-size: 0.92rem;
+  white-space: pre-wrap;
+}
+
+.post-composer {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.7rem;
+}
+
+.post-composer input {
+  flex: 1;
+}
+
+.linklike {
+  background: transparent;
+  border: none;
+  color: var(--accent);
+  padding: 0;
+  font-size: inherit;
+  font-weight: 500;
+}
+
+.linklike:hover {
+  text-decoration: underline;
+}
+
+.turn-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.thread-badge {
+  background: transparent;
+  border: 1px solid var(--accent-dim);
+  color: var(--accent);
+  border-radius: 99px;
+  font-size: 0.75rem;
+  padding: 0.05em 0.6em;
+}
+
+.create-thread {
+  margin-top: 0.7rem;
+  padding: 0.9rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.create-thread textarea {
+  font: inherit;
+  background: var(--bg);
+  color: var(--text-h);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.5em 0.75em;
+  resize: vertical;
+}
+
+.create-thread textarea:focus {
+  outline: none;
+  border-color: var(--accent-dim);
+}
+
 /* ── layout ───────────────────────────────────────────── */
 
 main {

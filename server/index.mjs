@@ -21,11 +21,12 @@ import {
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb';
 import { SQSClient, SendMessageBatchCommand } from '@aws-sdk/client-sqs';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const sqs = new SQSClient({});
-const { REPOS_TABLE, FOLLOWS_TABLE, AUTH_TABLE, IDENTITIES_TABLE, QUEUE_URL } = process.env;
+const { REPOS_TABLE, FOLLOWS_TABLE, AUTH_TABLE, IDENTITIES_TABLE, THREADS_TABLE, POSTS_TABLE, VOTES_TABLE, QUEUE_URL } =
+  process.env;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const HISTORY_FILE = 'llm-turn-history.jsonl';
@@ -88,6 +89,13 @@ async function apiHandler(event) {
     const user = await authenticate(event);
     if (!user) return json(401, { error: 'unauthorized', error_description: 'valid GitHub token required' });
 
+    if (method === 'POST' && path === '/api/threads') return createThread(event, user);
+    if (method === 'GET' && path === '/api/threads') return listThreads(event, user);
+    const threadMatch = path.match(/^\/api\/threads\/([0-9A-HJKMNP-TV-Z]{26})$/);
+    if (threadMatch && method === 'GET') return getThread(user, threadMatch[1]);
+    const postMatch = path.match(/^\/api\/threads\/([0-9A-HJKMNP-TV-Z]{26})\/posts$/);
+    if (postMatch && method === 'POST') return addPost(event, user, postMatch[1]);
+    if (method === 'PUT' && path === '/api/vote') return putVote(event, user);
     if (method === 'GET' && path === '/api/identity') return getIdentity(user);
     if (method === 'PUT' && path === '/api/identity/x') return putXIdentity(event, user);
     if (method === 'DELETE' && path === '/api/identity/x') return deleteXIdentity(user);
@@ -231,6 +239,198 @@ async function putFollow(event, user, repoId) {
 async function deleteFollow(user, repoId) {
   await ddb.send(new DeleteCommand({ TableName: FOLLOWS_TABLE, Key: { userId: user.userId, repoId } }));
   return json(200, { followed: false });
+}
+
+// ── discussion threads (a Reddit layer over session turns) ──────────
+//
+// Every thread anchors to one turn of one repo's llm-turn-history.jsonl:
+// (repo full name, turn record id). Threads carry a title + description,
+// posts form a reply tree, and both take up/down votes. Creator/author X
+// handles are denormalized at write time from the identities table.
+
+const B32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+
+function ulid() {
+  let ts = '';
+  let n = Date.now();
+  for (let i = 0; i < 10; i++) {
+    ts = B32[n % 32] + ts;
+    n = Math.floor(n / 32);
+  }
+  let rnd = '';
+  const bytes = randomBytes(16);
+  for (let i = 0; i < 16; i++) rnd += B32[bytes[i] % 32];
+  return ts + rnd;
+}
+
+const publicThread = (t, myVote) => ({
+  id: t.threadId,
+  repo: t.repo,
+  turn_id: t.turnId,
+  turn_ts: t.turnTs ?? null,
+  turn_speaker: t.turnSpeaker ?? null,
+  turn_excerpt: t.turnExcerpt,
+  title: t.title,
+  description: t.description,
+  creator: { github_id: t.creatorId, github_login: t.creatorLogin, x_handle: t.creatorXHandle ?? null },
+  created_at: t.createdAt,
+  score: t.score ?? 0,
+  reply_count: t.replyCount ?? 0,
+  my_vote: myVote ?? 0,
+});
+
+const publicPost = (p, myVote) => ({
+  id: p.postId,
+  parent_id: p.parentId ?? null,
+  text: p.text,
+  author: { github_id: p.authorId, github_login: p.authorLogin, x_handle: p.authorXHandle ?? null },
+  created_at: p.createdAt,
+  score: p.score ?? 0,
+  my_vote: myVote ?? 0,
+});
+
+async function xHandleOf(userId) {
+  const item = (await ddb.send(new GetCommand({ TableName: IDENTITIES_TABLE, Key: { userId } }))).Item;
+  return item?.xHandle ?? null;
+}
+
+/** The caller's votes on a set of target ids, as {targetId: value}. */
+async function myVotes(userId, targetIds) {
+  const votes = {};
+  for (const chunk of chunks(targetIds, 100)) {
+    const res = await ddb.send(new BatchGetCommand({
+      RequestItems: { [VOTES_TABLE]: { Keys: chunk.map((targetId) => ({ targetId, userId })) } },
+    }));
+    for (const v of res.Responses?.[VOTES_TABLE] ?? []) votes[v.targetId] = v.value;
+  }
+  return votes;
+}
+
+async function createThread(event, user) {
+  const b = parseBody(event) ?? {};
+  const repo = String(b.repo ?? '');
+  const turnId = String(b.turn_id ?? '');
+  const title = String(b.title ?? '').trim().slice(0, 140);
+  const description = String(b.description ?? '').trim().slice(0, 5000);
+  if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) return json(400, { error: 'bad_request', error_description: 'repo must be owner/name' });
+  if (!/^[\w:-]{1,64}$/.test(turnId)) return json(400, { error: 'bad_request', error_description: 'turn_id required' });
+  if (!title) return json(400, { error: 'bad_request', error_description: 'title required' });
+
+  const item = {
+    threadId: ulid(),
+    gsiPk: 'T',
+    repo,
+    turnId,
+    turnTs: typeof b.turn_ts === 'string' ? b.turn_ts.slice(0, 40) : null,
+    turnSpeaker: typeof b.turn_speaker === 'string' ? b.turn_speaker.slice(0, 80) : null,
+    turnExcerpt: String(b.turn_excerpt ?? '').slice(0, 280),
+    title,
+    description,
+    creatorId: user.userId,
+    creatorLogin: user.login,
+    creatorXHandle: await xHandleOf(user.userId),
+    createdAt: Date.now(),
+    score: 0,
+    replyCount: 0,
+  };
+  await ddb.send(new PutCommand({ TableName: THREADS_TABLE, Item: item }));
+  return json(200, { thread: publicThread(item, 0) });
+}
+
+async function listThreads(event, user) {
+  const repo = event.queryStringParameters?.repo;
+  const q = await ddb.send(new QueryCommand({
+    TableName: THREADS_TABLE,
+    IndexName: 'list',
+    KeyConditionExpression: 'gsiPk = :t',
+    ExpressionAttributeValues: { ':t': 'T' },
+    ScanIndexForward: false, // ULID range key → newest first
+    Limit: 200,
+  }));
+  let items = q.Items ?? [];
+  if (repo) items = items.filter((t) => t.repo === repo);
+  const votes = await myVotes(user.userId, items.map((t) => t.threadId));
+  return json(200, { threads: items.map((t) => publicThread(t, votes[t.threadId])) });
+}
+
+async function getThread(user, threadId) {
+  const thread = (await ddb.send(new GetCommand({ TableName: THREADS_TABLE, Key: { threadId } }))).Item;
+  if (!thread) return json(400, { error: 'not_found', error_description: 'no such thread' });
+  const q = await ddb.send(new QueryCommand({
+    TableName: POSTS_TABLE,
+    KeyConditionExpression: 'threadId = :t',
+    ExpressionAttributeValues: { ':t': threadId },
+    Limit: 500,
+  }));
+  const posts = q.Items ?? [];
+  const votes = await myVotes(user.userId, [threadId, ...posts.map((p) => `${threadId}#${p.postId}`)]);
+  return json(200, {
+    thread: publicThread(thread, votes[threadId]),
+    posts: posts.map((p) => publicPost(p, votes[`${threadId}#${p.postId}`])),
+  });
+}
+
+async function addPost(event, user, threadId) {
+  const b = parseBody(event) ?? {};
+  const text = String(b.text ?? '').trim().slice(0, 5000);
+  const parentId = typeof b.parent_id === 'string' && /^[0-9A-HJKMNP-TV-Z]{26}$/.test(b.parent_id) ? b.parent_id : null;
+  if (!text) return json(400, { error: 'bad_request', error_description: 'text required' });
+  const thread = (await ddb.send(new GetCommand({ TableName: THREADS_TABLE, Key: { threadId } }))).Item;
+  if (!thread) return json(400, { error: 'not_found', error_description: 'no such thread' });
+
+  const item = {
+    threadId,
+    postId: ulid(),
+    parentId,
+    text,
+    authorId: user.userId,
+    authorLogin: user.login,
+    authorXHandle: await xHandleOf(user.userId),
+    createdAt: Date.now(),
+    score: 0,
+  };
+  await ddb.send(new PutCommand({ TableName: POSTS_TABLE, Item: item }));
+  await ddb.send(new UpdateCommand({
+    TableName: THREADS_TABLE,
+    Key: { threadId },
+    UpdateExpression: 'ADD replyCount :one',
+    ExpressionAttributeValues: { ':one': 1 },
+  }));
+  return json(200, { post: publicPost(item, 0) });
+}
+
+/**
+ * PUT /api/vote  body: {thread_id, post_id?, value: 1|0|-1}
+ * Idempotent per (target, user): re-voting replaces; 0 clears. Score deltas
+ * are applied to the thread/post record and the new score returned.
+ */
+async function putVote(event, user) {
+  const b = parseBody(event) ?? {};
+  const threadId = String(b.thread_id ?? '');
+  const postId = typeof b.post_id === 'string' ? b.post_id : null;
+  const value = b.value;
+  if (!/^[0-9A-HJKMNP-TV-Z]{26}$/.test(threadId) || ![1, 0, -1].includes(value) ||
+      (postId && !/^[0-9A-HJKMNP-TV-Z]{26}$/.test(postId))) {
+    return json(400, { error: 'bad_request', error_description: 'thread_id and value 1|0|-1 required' });
+  }
+  const targetId = postId ? `${threadId}#${postId}` : threadId;
+  const existing = (await ddb.send(new GetCommand({ TableName: VOTES_TABLE, Key: { targetId, userId: user.userId } }))).Item;
+  const delta = value - (existing?.value ?? 0);
+  if (delta === 0) return json(200, { my_vote: value, unchanged: true });
+
+  if (value === 0) {
+    await ddb.send(new DeleteCommand({ TableName: VOTES_TABLE, Key: { targetId, userId: user.userId } }));
+  } else {
+    await ddb.send(new PutCommand({ TableName: VOTES_TABLE, Item: { targetId, userId: user.userId, value, at: Date.now() } }));
+  }
+  const upd = await ddb.send(new UpdateCommand({
+    TableName: postId ? POSTS_TABLE : THREADS_TABLE,
+    Key: postId ? { threadId, postId } : { threadId },
+    UpdateExpression: 'ADD score :d',
+    ExpressionAttributeValues: { ':d': delta },
+    ReturnValues: 'UPDATED_NEW',
+  }));
+  return json(200, { my_vote: value, score: upd.Attributes?.score ?? 0 });
 }
 
 // ── identities (GitHub ⇄ X linking) ─────────────────────────────────

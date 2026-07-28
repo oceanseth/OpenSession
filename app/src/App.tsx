@@ -3,6 +3,7 @@ import './App.css';
 import { Chat } from './components/Chat';
 import { Feed } from './components/Feed';
 import { SessionView } from './components/SessionView';
+import { Threads } from './components/Threads';
 import { completeLogin } from './lib/auth';
 import { GitHubClient } from './lib/github';
 import {
@@ -14,7 +15,7 @@ import {
 import { parseOpenSessionJsonl, type ParsedArchive } from './lib/opensession';
 import { XChatConnector } from './lib/xchat';
 
-type Tab = 'activity' | 'chat';
+type Tab = 'activity' | 'threads' | 'chat';
 type View = { name: 'tabs' } | { name: 'session'; title: string; archive: ParsedArchive; sourceUrl?: string };
 
 const TOKEN_KEY = 'opensession.github.token';
@@ -24,6 +25,7 @@ export default function App() {
   const [token, setToken] = useState<string>(() => localStorage.getItem(TOKEN_KEY) ?? '');
   const [tab, setTab] = useState<Tab>('activity');
   const [view, setView] = useState<View>({ name: 'tabs' });
+  const [focusThread, setFocusThread] = useState<string>();
   const [loadError, setLoadError] = useState<string>();
   const [identity, setIdentity] = useState<Identity | null>(null);
   const [identityLoaded, setIdentityLoaded] = useState(false);
@@ -209,6 +211,9 @@ export default function App() {
           <button className={tab === 'activity' ? 'tab active' : 'tab'} onClick={() => setTab('activity')}>
             Activity
           </button>
+          <button className={tab === 'threads' ? 'tab active' : 'tab'} onClick={() => setTab('threads')}>
+            Threads
+          </button>
           <button className={tab === 'chat' ? 'tab active' : 'tab'} onClick={() => setTab('chat')}>
             Chat
           </button>
@@ -226,6 +231,15 @@ export default function App() {
             loadError={loadError}
           />
         )}
+        {view.name === 'tabs' && tab === 'threads' && token && (
+          <Threads
+            token={token}
+            initialThreadId={focusThread}
+            onOpenSession={(repo) =>
+              void openUrl(`https://github.com/${repo}/blob/HEAD/llm-turn-history.jsonl`)
+            }
+          />
+        )}
         {view.name === 'tabs' && tab === 'chat' && token && (
           <Chat client={client} token={token} myIdentity={identity} connector={connector} />
         )}
@@ -234,7 +248,13 @@ export default function App() {
             title={view.title}
             archive={view.archive}
             sourceUrl={view.sourceUrl}
+            token={token || undefined}
             onBack={() => setView({ name: 'tabs' })}
+            onOpenThread={(threadId) => {
+              setFocusThread(threadId);
+              setTab('threads');
+              setView({ name: 'tabs' });
+            }}
           />
         )}
       </main>
