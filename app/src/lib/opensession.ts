@@ -25,6 +25,10 @@ export interface SessionRecord {
   kind: 'session';
   session: string; // ISO date
   tool?: string;
+  /** v0.4: stable session id (ULID) — lets turns reference their session explicitly. */
+  sid?: string;
+  /** v0.4: human label for the session/channel (e.g. an agent's name in a multiagent setup). */
+  name?: string;
   speakers: Record<string, Speaker>;
 }
 
@@ -35,6 +39,8 @@ export interface MessageRecord {
   t: string; // verbatim turn text
   ts?: string; // ISO-8601 UTC
   x?: string; // tool-activity summary (model turns)
+  /** v0.4: sid of the session this turn belongs to (beats file-order assignment). */
+  s?: string;
   n?: number; // legacy v0.2 monotonic counter
 }
 
@@ -101,6 +107,8 @@ function classify(obj: Record<string, unknown>): OpenSessionRecord {
       kind: 'session',
       session: obj.session,
       tool: obj.tool as string | undefined,
+      sid: typeof obj.sid === 'string' ? obj.sid : undefined,
+      name: typeof obj.name === 'string' ? obj.name : undefined,
       speakers: obj.speakers as Record<string, Speaker>,
     };
   }
@@ -115,6 +123,7 @@ function classify(obj: Record<string, unknown>): OpenSessionRecord {
       t: obj.t,
       ts: obj.ts as string | undefined,
       x: obj.x as string | undefined,
+      s: typeof obj.s === 'string' ? obj.s : undefined,
       n: typeof obj.n === 'number' ? obj.n : undefined,
     };
   }
@@ -177,23 +186,43 @@ export function parseOpenSessionJsonl(text: string): ParsedArchive {
     kept.push(entry);
   }
 
-  // Header stays first; sessions/messages/identities ordered by (ts, id).
-  // Session records lack ts, so they act as boundaries: messages are assigned
-  // to the most recent session record *in file order*, then sorted within it.
+  // Grouping. v0.4 session records may carry a `sid`, and messages may carry
+  // `s` referencing it — that binding is authoritative and survives union
+  // merges interleaving parallel branches. Records without `s` fall back to
+  // "most recent session record in file order" (the pre-v0.4 behavior).
+  // Re-declaring a session record with an already-seen sid is idempotent
+  // (each branch may carry its own copy); speaker tables are merged.
   const sessions: ParsedSession[] = [];
+  const bySid = new Map<string, ParsedSession>();
+  const sessionAt = new Map<number, ParsedSession>(); // kept-index → session
+  kept.forEach(({ record }, i) => {
+    if (record.kind !== 'session') return;
+    const existing = record.sid ? bySid.get(record.sid) : undefined;
+    if (existing) {
+      Object.assign(existing.session.speakers, record.speakers);
+      if (!existing.session.name && record.name) existing.session.name = record.name;
+      sessionAt.set(i, existing);
+    } else {
+      const s: ParsedSession = { session: record, messages: [], identities: [] };
+      sessions.push(s);
+      if (record.sid) bySid.set(record.sid, s);
+      sessionAt.set(i, s);
+    }
+  });
+
   let current: ParsedSession | undefined;
   const orphanMessages: MessageRecord[] = [];
   const orphanIdentities: IdentityRecord[] = [];
-  for (const { record } of kept) {
+  kept.forEach(({ record }, i) => {
     if (record.kind === 'session') {
-      current = { session: record, messages: [], identities: [] };
-      sessions.push(current);
+      current = sessionAt.get(i);
     } else if (record.kind === 'message') {
-      (current ? current.messages : orphanMessages).push(record);
+      const target = (record.s && bySid.get(record.s)) || current;
+      (target ? target.messages : orphanMessages).push(record);
     } else if (record.kind === 'identity') {
       (current ? current.identities : orphanIdentities).push(record);
     }
-  }
+  });
   if ((orphanMessages.length || orphanIdentities.length) && sessions.length === 0) {
     // Archive with no session record at all — synthesize one so messages render.
     sessions.push({
@@ -227,4 +256,12 @@ function compareKeys(a: [string, string, number], b: [string, string, number]): 
 /** Resolve a message's speaker from its session's speaker table. */
 export function speakerOf(session: ParsedSession, msg: MessageRecord): Speaker | undefined {
   return session.session.speakers[msg.m];
+}
+
+/** Display label for a session: name > tool+date > date > sid > index. */
+export function sessionLabel(s: ParsedSession, index: number): string {
+  const r = s.session;
+  if (r.name) return r.name;
+  const base = r.session || r.sid?.slice(0, 10) || `session ${index + 1}`;
+  return r.tool ? `${base} · ${r.tool}` : base;
 }

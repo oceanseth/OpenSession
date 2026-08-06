@@ -1,26 +1,40 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { GitHubClient } from '../lib/github';
 import { hasBrowserLlm, suggestThreadTitle } from '../lib/llm';
 import {
+  sessionLabel,
   speakerOf,
   type MessageRecord,
   type ParsedArchive,
   type ParsedSession,
 } from '../lib/opensession';
 import { ThreadsClient, type Thread } from '../lib/threads';
+import type { XChatConnector } from '../lib/xchat';
+import { DmPopup } from './DmPopup';
 
 interface SessionViewProps {
   title: string; // owner/repo when opened from the feed or a github URL
   archive: ParsedArchive;
   sourceUrl?: string;
   token?: string;
+  client: GitHubClient;
+  connector: XChatConnector;
   onBack: () => void;
   onOpenThread?: (threadId: string) => void;
 }
 
-export function SessionView({ title, archive, sourceUrl, token, onBack, onOpenThread }: SessionViewProps) {
+/**
+ * Slack-style session browser: sessions/channels down the left rail, the
+ * selected session's turns as a chat transcript on the right, clickable
+ * speaker names opening a quick-DM popup.
+ */
+export function SessionView({ title, archive, sourceUrl, token, client, connector, onBack, onOpenThread }: SessionViewProps) {
   const threadsClient = useMemo(() => (token ? new ThreadsClient(token) : null), [token]);
   const [threadsByTurn, setThreadsByTurn] = useState<Map<string, Thread[]>>(new Map());
+  const [selected, setSelected] = useState(() => Math.max(0, archive.sessions.length - 1));
+  const [dmLogin, setDmLogin] = useState<string>();
   const isRepo = /^[\w.-]+\/[\w.-]+$/.test(title);
+  const session = archive.sessions[selected];
 
   const loadThreads = useCallback(async () => {
     if (!threadsClient || !isRepo) return;
@@ -43,98 +57,95 @@ export function SessionView({ title, archive, sourceUrl, token, onBack, onOpenTh
   }, [loadThreads]);
 
   return (
-    <div className="session-view">
-      <div className="session-toolbar">
-        <button className="ghost" onClick={onBack}>← back</button>
-        <h2>{title}</h2>
+    <div className="slack">
+      <aside className="slack-side">
+        <header className="slack-side-head">
+          <button className="ghost" onClick={onBack}>←</button>
+          <span className="slack-repo" title={title}>{title}</span>
+        </header>
         {sourceUrl && (
-          <a href={sourceUrl} target="_blank" rel="noreferrer" className="source-link">
-            source ↗
+          <a href={sourceUrl} target="_blank" rel="noreferrer" className="slack-source fine">
+            raw history ↗
           </a>
         )}
-      </div>
+        <div className="slack-side-label">
+          Sessions <span className="fine">{archive.sessions.length}</span>
+        </div>
+        <ul className="slack-channels">
+          {archive.sessions.map((s, i) => (
+            <li key={s.session.sid ?? i}>
+              <button
+                className={i === selected ? 'slack-channel active' : 'slack-channel'}
+                title={s.session.sid}
+                onClick={() => setSelected(i)}
+              >
+                <span className="hash">#</span>
+                <span className="slack-channel-name">{sessionLabel(s, i)}</span>
+                <span className="channel-count">{s.messages.length}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+        {archive.errors.length > 0 && (
+          <p className="status error slack-errors">
+            {archive.errors.length} unparseable line{archive.errors.length > 1 ? 's' : ''}
+          </p>
+        )}
+      </aside>
 
-      {archive.header?.preface && <p className="preface">“{archive.header.preface}”</p>}
+      <section className="slack-main">
+        {session ? (
+          <>
+            <header className="slack-main-head">
+              <span className="slack-title">
+                <span className="hash">#</span> {sessionLabel(session, selected)}
+              </span>
+              <span className="fine">{session.session.session}</span>
+              {session.session.tool && <span className="session-tool">{session.session.tool}</span>}
+              {session.session.sid && (
+                <code className="session-sid" title={`session id ${session.session.sid}`}>
+                  {session.session.sid.slice(0, 10)}…
+                </code>
+              )}
+              <span className="speakers">
+                {Object.entries(session.session.speakers).map(([abbrev, sp]) => (
+                  <span key={abbrev} className={`speaker-chip ${sp.kind}`}>
+                    {sp.name ?? abbrev}
+                    {session.identities.some((r) => r.identity === abbrev) && <span title="identity attested"> ✓</span>}
+                  </span>
+                ))}
+              </span>
+            </header>
+            <div className="slack-msgs">
+              {session.messages.map((m) => (
+                <Msg
+                  key={m.id}
+                  session={session}
+                  msg={m}
+                  repo={isRepo ? title : undefined}
+                  threadsClient={threadsClient}
+                  threads={threadsByTurn.get(m.id) ?? []}
+                  onThreadCreated={loadThreads}
+                  onOpenThread={onOpenThread}
+                  onOpenDm={token ? setDmLogin : undefined}
+                />
+              ))}
+              {session.messages.length === 0 && <p className="status">No turns recorded in this session.</p>}
+            </div>
+          </>
+        ) : (
+          <p className="status slack-empty">No session records in this archive.</p>
+        )}
+      </section>
 
-      {archive.errors.length > 0 && (
-        <p className="status error">
-          {archive.errors.length} line{archive.errors.length > 1 ? 's' : ''} failed to parse (first at line{' '}
-          {archive.errors[0].line}).
-        </p>
+      {dmLogin && token && (
+        <DmPopup login={dmLogin} client={client} token={token} connector={connector} onClose={() => setDmLogin(undefined)} />
       )}
-
-      {archive.sessions.length === 0 && <p className="status">No session records in this archive.</p>}
-
-      {archive.sessions.map((s, i) => (
-        <Session
-          key={i}
-          session={s}
-          repo={isRepo ? title : undefined}
-          threadsClient={threadsClient}
-          threadsByTurn={threadsByTurn}
-          onThreadCreated={loadThreads}
-          onOpenThread={onOpenThread}
-        />
-      ))}
     </div>
   );
 }
 
-interface SessionProps {
-  session: ParsedSession;
-  repo?: string;
-  threadsClient: ThreadsClient | null;
-  threadsByTurn: Map<string, Thread[]>;
-  onThreadCreated: () => void;
-  onOpenThread?: (threadId: string) => void;
-}
-
-function Session({ session, repo, threadsClient, threadsByTurn, onThreadCreated, onOpenThread }: SessionProps) {
-  const { speakers } = session.session;
-  const attested = new Set(session.identities.map((r) => r.identity));
-  return (
-    <section className="session card">
-      <header className="session-head">
-        <span className="session-date">{session.session.session || 'undated session'}</span>
-        {session.session.tool && <span className="session-tool">{session.session.tool}</span>}
-        <span className="speakers">
-          {Object.entries(speakers).map(([abbrev, sp]) => (
-            <span key={abbrev} className={`speaker-chip ${sp.kind}`}>
-              {sp.name ?? abbrev}
-              {sp.kind === 'model' && sp.id ? ` (${sp.id})` : ''}
-              {attested.has(abbrev) && <span title="identity attested"> ✓</span>}
-            </span>
-          ))}
-        </span>
-      </header>
-      {session.identities.length > 0 && (
-        <p className="identities">
-          {session.identities.map((r, i) => (
-            <span key={i} className="identity-chip" title={JSON.stringify(r, null, 2)}>
-              {String(r.github ?? r.identity)} attested via {r.method}
-            </span>
-          ))}
-        </p>
-      )}
-      <div className="turns">
-        {session.messages.map((m) => (
-          <Turn
-            key={m.id}
-            session={session}
-            msg={m}
-            repo={repo}
-            threadsClient={threadsClient}
-            threads={threadsByTurn.get(m.id) ?? []}
-            onThreadCreated={onThreadCreated}
-            onOpenThread={onOpenThread}
-          />
-        ))}
-      </div>
-    </section>
-  );
-}
-
-interface TurnProps {
+interface MsgProps {
   session: ParsedSession;
   msg: MessageRecord;
   repo?: string;
@@ -142,60 +153,72 @@ interface TurnProps {
   threads: Thread[];
   onThreadCreated: () => void;
   onOpenThread?: (threadId: string) => void;
+  onOpenDm?: (login: string) => void;
 }
 
-function Turn({ session, msg, repo, threadsClient, threads, onThreadCreated, onOpenThread }: TurnProps) {
+function Msg({ session, msg, repo, threadsClient, threads, onThreadCreated, onOpenThread, onOpenDm }: MsgProps) {
   const [expanded, setExpanded] = useState(false);
   const [discussing, setDiscussing] = useState(false);
   const speaker = speakerOf(session, msg);
   const kind = speaker?.kind ?? 'human';
+  const name = speaker?.name ?? msg.m;
+  const github = speaker?.github;
   const long = msg.t.length > 1200;
   const text = long && !expanded ? msg.t.slice(0, 1200) + '…' : msg.t;
   const canDiscuss = !!threadsClient && !!repo;
 
   return (
-    <article className={`turn ${kind}`}>
-      <div className="turn-meta">
-        <span className="turn-speaker">{speaker?.name ?? msg.m}</span>
-        {msg.ts && <time dateTime={msg.ts}>{formatTs(msg.ts)}</time>}
-        <span className="turn-actions">
-          {threads.length > 0 && (
-            <button
-              className="thread-badge"
-              title={threads.map((t) => t.title).join('\n')}
-              onClick={() => onOpenThread?.(threads[0].id)}
-            >
-              💬 {threads.length}
+    <div className="msg">
+      <div className={`msg-avatar ${kind}`}>{name.slice(0, 1).toUpperCase()}</div>
+      <div className="msg-body">
+        <div className="msg-head">
+          {github && onOpenDm ? (
+            <button className={`msg-user ${kind} clickable`} title={`DM ${github}`} onClick={() => onOpenDm(github)}>
+              {name}
             </button>
+          ) : (
+            <span className={`msg-user ${kind}`}>{name}</span>
           )}
-          {canDiscuss && (
-            <button className="linklike" onClick={() => setDiscussing(!discussing)}>
-              {discussing ? 'cancel' : '+ thread'}
-            </button>
-          )}
-        </span>
+          {msg.ts && <time dateTime={msg.ts}>{formatTs(msg.ts)}</time>}
+          <span className="msg-actions">
+            {threads.length > 0 && (
+              <button
+                className="thread-badge"
+                title={threads.map((t) => t.title).join('\n')}
+                onClick={() => onOpenThread?.(threads[0].id)}
+              >
+                💬 {threads.length}
+              </button>
+            )}
+            {canDiscuss && (
+              <button className="linklike" onClick={() => setDiscussing(!discussing)}>
+                {discussing ? 'cancel' : '+ thread'}
+              </button>
+            )}
+          </span>
+        </div>
+        <div className="msg-text">{text}</div>
+        {long && (
+          <button className="ghost expand" onClick={() => setExpanded(!expanded)}>
+            {expanded ? 'show less' : `show all ${msg.t.length.toLocaleString()} chars`}
+          </button>
+        )}
+        {msg.x && <div className="turn-tools">⚙ {msg.x}</div>}
+        {discussing && canDiscuss && (
+          <CreateThreadForm
+            client={threadsClient!}
+            repo={repo!}
+            msg={msg}
+            speakerName={name}
+            onDone={(threadId) => {
+              setDiscussing(false);
+              onThreadCreated();
+              onOpenThread?.(threadId);
+            }}
+          />
+        )}
       </div>
-      <div className="turn-body">{text}</div>
-      {long && (
-        <button className="ghost expand" onClick={() => setExpanded(!expanded)}>
-          {expanded ? 'show less' : `show all ${msg.t.length.toLocaleString()} chars`}
-        </button>
-      )}
-      {msg.x && <div className="turn-tools">⚙ {msg.x}</div>}
-      {discussing && canDiscuss && (
-        <CreateThreadForm
-          client={threadsClient!}
-          repo={repo!}
-          msg={msg}
-          speakerName={speaker?.name ?? msg.m}
-          onDone={(threadId) => {
-            setDiscussing(false);
-            onThreadCreated();
-            onOpenThread?.(threadId);
-          }}
-        />
-      )}
-    </article>
+    </div>
   );
 }
 

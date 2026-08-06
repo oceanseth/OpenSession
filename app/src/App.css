@@ -566,6 +566,12 @@ main {
   padding: 1.5rem 1.25rem 3rem;
 }
 
+main.wide {
+  max-width: none;
+  padding: 0;
+  display: flex;
+}
+
 footer {
   border-top: 1px solid var(--border);
   color: var(--text-dim);
@@ -831,6 +837,328 @@ button.ghost.inline {
   color: var(--text-dim);
   font-size: 0.88rem;
   margin: 0 0 1rem;
+}
+
+/* ── Slack-style session browser ──────────────────────── */
+
+.slack {
+  display: flex;
+  width: 100%;
+  min-height: 70vh;
+}
+
+.slack-side {
+  flex: 0 0 260px;
+  border-right: 1px solid var(--border);
+  background: var(--bg-card);
+  padding: 0.9rem 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.slack-side-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 0.9rem 0.6rem;
+}
+
+.slack-repo {
+  font-weight: 700;
+  color: var(--text-h);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slack-source {
+  padding: 0 0.9rem 0.6rem;
+}
+
+.slack-side-label {
+  padding: 0.6rem 0.9rem 0.3rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+}
+
+.slack-channels {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.slack-channel {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  color: var(--text-dim);
+  padding: 0.4rem 0.9rem;
+  text-align: left;
+  font-weight: 500;
+}
+
+.slack-channel:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-h);
+}
+
+.slack-channel.active {
+  background: var(--accent-dim);
+  color: #eafff7;
+}
+
+.slack-channel .hash {
+  opacity: 0.6;
+}
+
+.slack-channel-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slack-errors {
+  padding: 0.6rem 0.9rem 0;
+}
+
+.slack-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.slack-main-head {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+  padding: 0.9rem 1.4rem;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  z-index: 5;
+}
+
+.slack-title {
+  font-weight: 700;
+  color: var(--text-h);
+  font-size: 1.05rem;
+}
+
+.slack-title .hash {
+  color: var(--text-dim);
+}
+
+.slack-empty {
+  padding: 2rem 1.4rem;
+}
+
+.slack-msgs {
+  flex: 1;
+  padding: 1rem 1.4rem 2.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 1200px;
+}
+
+.msg {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.msg-avatar {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: #fff;
+}
+
+.msg-avatar.human {
+  background: var(--human);
+}
+
+.msg-avatar.model {
+  background: var(--model);
+}
+
+.msg-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.msg-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  font-size: 0.85rem;
+}
+
+.msg-user {
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-weight: 700;
+  font-size: inherit;
+}
+
+.msg-user.human {
+  color: var(--human);
+}
+
+.msg-user.model {
+  color: var(--model);
+}
+
+.msg-user.clickable:hover {
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.msg-head time {
+  color: var(--text-dim);
+  font-size: 0.78rem;
+}
+
+.msg-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.msg:hover .msg-actions,
+.msg-actions:has(.thread-badge) {
+  opacity: 1;
+}
+
+.msg-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.94rem;
+  margin-top: 0.15rem;
+}
+
+/* ── DM popup ─────────────────────────────────────────── */
+
+.popup-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: 1rem;
+}
+
+.popup {
+  width: min(520px, 100%);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.popup-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.8rem 1.1rem;
+  border-bottom: 1px solid var(--border);
+  font-weight: 700;
+  color: var(--text-h);
+}
+
+.popup-body {
+  padding: 1.2rem 1.1rem;
+  text-align: center;
+}
+
+.popup-thread {
+  padding: 0.9rem 1.1rem;
+  overflow-y: auto;
+}
+
+@media (max-width: 700px) {
+  .slack {
+    flex-direction: column;
+  }
+
+  .slack-side {
+    flex-basis: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+}
+
+.channel-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 1rem;
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  padding: 0.5rem 0;
+  z-index: 5;
+}
+
+.channel {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  border-radius: 99px;
+  padding: 0.25em 0.9em;
+  font-size: 0.85rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
+}
+
+.channel:hover {
+  color: var(--text-h);
+}
+
+.channel.active {
+  color: var(--accent);
+  border-color: var(--accent-dim);
+  background: var(--bg-card-hover);
+}
+
+.channel-count {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--text-dim);
+  background: var(--bg);
+  border-radius: 99px;
+  padding: 0 0.5em;
+}
+
+.session-sid {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  cursor: help;
 }
 
 .session {

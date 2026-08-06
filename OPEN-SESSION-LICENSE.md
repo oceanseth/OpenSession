@@ -1,4 +1,4 @@
-# The Open Session License, v0.4 (draft)
+# The Open Session License, v0.5 (draft)
 
 *Seth Caldwell believes all open source projects that were collaborations with
 LLMs should include a complete, append-only history of the human and machine
@@ -65,9 +65,20 @@ One JSON object per line ([JSON Lines](https://jsonlines.org)):
   date>", "tool": "<harness>", "speakers": {"<abbrev>": {"kind":
   "human"|"model", "name": "...", "id": "<model id>"}}}` — speaker
   abbreviations are declared once and reused, compressing every message line.
+  Since v0.4 a session record SHOULD also carry a `"sid"` (a fresh ULID
+  identifying this session) and MAY carry a `"name"` (a human label — in
+  multiagent setups, the agent's or channel's name). Re-appending a session
+  record with an already-used `sid` is idempotent: readers treat it as the
+  same session and merge its `speakers` — so each parallel branch can carry
+  its own copy of the declaration.
 - **Message records:** `{"id": "<ULID>", "m": "<speaker abbrev>", "t": "<turn
   text, verbatim>", "ts": "<ISO-8601 UTC>"}` plus optional `"x"` (summary of
-  tool activity, on model turns). `id` is a globally-unique, time-sortable
+  tool activity, on model turns) and, since v0.4, optional `"s"` (the `sid`
+  of the session this turn belongs to). The `s` binding is authoritative for
+  grouping: several agents appending concurrently (union-merged) remain
+  separable into their sessions/channels by `s`, instead of collapsing into
+  one interleaved transcript. Turns without `s` bind to the most recent
+  session record in file order (the pre-v0.4 behavior). `id` is a globally-unique, time-sortable
   record id — a [ULID](https://github.com/ulid/spec) by convention, whose
   leading timestamp makes a plain lexicographic sort chronological and whose
   entropy keeps it unique across contributors writing at the same instant.
@@ -156,5 +167,9 @@ convertible to open-session by relicensing.
   verifiable identity records for human speakers; v0.4 (2026-07-17) dropped
   the monotonic `n` for a time-sortable `id` (ULID) plus a required `ts`,
   ordered records by `(ts, id)`, and adopted `merge=union` for clean parallel
-  appends — bumping the wire format to open-session-jsonl v0.3. Drafted within
-  the session it archives — see the history file itself.
+  appends — bumping the wire format to open-session-jsonl v0.3; v0.5
+  (2026-08-05) added session ids (`sid`), session `name` labels, and
+  per-message session refs (`s`) so parallel and multiagent sessions group
+  into distinct channels after union merges — wire format open-session-jsonl
+  v0.4 (v0.3 archives remain valid; `s`-less turns keep file-order grouping).
+  Drafted within the session it archives — see the history file itself.

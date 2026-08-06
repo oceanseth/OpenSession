@@ -187,7 +187,7 @@ type ThreadState =
   | { phase: 'loaded'; conversationId: string; title: string | null; messages: DmMessage[] }
   | { phase: 'error'; message: string };
 
-function ConversationPane({ connector, handle, login }: { connector: XChatConnector; handle: string; login: string }) {
+export function ConversationPane({ connector, handle, login }: { connector: XChatConnector; handle: string; login: string }) {
   const [thread, setThread] = useState<ThreadState>({ phase: 'searching' });
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);

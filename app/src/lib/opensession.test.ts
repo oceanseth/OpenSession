@@ -113,6 +113,51 @@ describe('parseOpenSessionJsonl', () => {
     expect(parsed.records.some((r) => r.kind === 'format-update')).toBe(true);
   });
 
+  it('groups turns by sid reference even when branches interleave (v0.4)', () => {
+    const sessA = JSON.stringify({ session: '2026-08-05', sid: '01SA', name: 'planner', speakers: { a: { kind: 'model', name: 'Agent A' } } });
+    const sessB = JSON.stringify({ session: '2026-08-05', sid: '01SB', name: 'coder', speakers: { b: { kind: 'model', name: 'Agent B' } } });
+    // Union merge interleaved the two agents' appends: B's turn lands after A's
+    // session record but carries s: 01SB, so it must NOT fall into A's session.
+    const text = [
+      header,
+      sessA,
+      sessB,
+      JSON.stringify({ id: '01A', m: 'a', t: 'plan step', ts: '2026-08-05T01:00:00.000Z', s: '01SA' }),
+      JSON.stringify({ id: '01B', m: 'b', t: 'write code', ts: '2026-08-05T01:00:01.000Z', s: '01SB' }),
+      JSON.stringify({ id: '01C', m: 'a', t: 'review', ts: '2026-08-05T01:00:02.000Z', s: '01SA' }),
+    ].join('\n');
+    const parsed = parseOpenSessionJsonl(text);
+    expect(parsed.sessions).toHaveLength(2);
+    expect(parsed.sessions[0].session.name).toBe('planner');
+    expect(parsed.sessions[0].messages.map((m) => m.t)).toEqual(['plan step', 'review']);
+    expect(parsed.sessions[1].messages.map((m) => m.t)).toEqual(['write code']);
+  });
+
+  it('re-declared sid is idempotent and merges speakers', () => {
+    const s1 = JSON.stringify({ session: '2026-08-05', sid: '01SA', speakers: { a: { kind: 'model', name: 'A' } } });
+    const s2 = JSON.stringify({ session: '2026-08-05', sid: '01SA', name: 'main', speakers: { h: { kind: 'human', name: 'Seth' } } });
+    const text = [
+      header,
+      s1,
+      JSON.stringify({ id: '01A', m: 'a', t: 'one', ts: '2026-08-05T01:00:00.000Z', s: '01SA' }),
+      s2,
+      JSON.stringify({ id: '01B', m: 'h', t: 'two', ts: '2026-08-05T01:00:01.000Z', s: '01SA' }),
+    ].join('\n');
+    const parsed = parseOpenSessionJsonl(text);
+    expect(parsed.sessions).toHaveLength(1);
+    expect(parsed.sessions[0].session.name).toBe('main');
+    expect(Object.keys(parsed.sessions[0].session.speakers).sort()).toEqual(['a', 'h']);
+    expect(parsed.sessions[0].messages).toHaveLength(2);
+  });
+
+  it('sid-less messages still bind to the preceding session record', () => {
+    const sess = JSON.stringify({ session: '2026-08-05', sid: '01SA', speakers: { s: { kind: 'human', name: 'Seth' } } });
+    const parsed = parseOpenSessionJsonl(
+      [header, sess, msg('01A', 's', 'no ref', '2026-08-05T01:00:00.000Z')].join('\n'),
+    );
+    expect(parsed.sessions[0].messages).toHaveLength(1);
+  });
+
   it('renders archives that lack a session record', () => {
     const parsed = parseOpenSessionJsonl([header, msg('01A', 's', 'stray', '2026-07-24T01:00:00.000Z')].join('\n'));
     expect(parsed.sessions).toHaveLength(1);

@@ -119,6 +119,15 @@ export class GitHubClient {
     };
   }
 
+  /** GitHub numeric user id for a login (identity records are keyed by id). */
+  async userIdOf(login: string): Promise<number | null> {
+    try {
+      return (await this.get<{ id: number }>(`/users/${encodeURIComponent(login)}`)).id;
+    } catch {
+      return null;
+    }
+  }
+
   /** Unique authors of commits touching the history file — the session's contributors. */
   async historyContributors(fullName: string): Promise<Contributor[]> {
     interface CommitEntry {

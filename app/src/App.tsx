@@ -220,7 +220,7 @@ export default function App() {
         </nav>
       )}
 
-      <main>
+      <main className={view.name === 'session' ? 'wide' : undefined}>
         {view.name === 'tabs' && (tab === 'activity' || !token) && (
           <Feed
             client={client}
@@ -249,6 +249,8 @@ export default function App() {
             archive={view.archive}
             sourceUrl={view.sourceUrl}
             token={token || undefined}
+            client={client}
+            connector={connector}
             onBack={() => setView({ name: 'tabs' })}
             onOpenThread={(threadId) => {
               setFocusThread(threadId);
