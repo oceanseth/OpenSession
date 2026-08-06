@@ -221,12 +221,23 @@ export function ConversationPane({ connector, handle, login }: { connector: XCha
     try {
       let conversationId = convRef.current;
       if (!conversationId) {
-        const rows = await connector.searchConversations(handle);
-        const needle = handle.toLowerCase();
-        const row = rows.find(
-          (r: ConversationRow) =>
-            r.title.toLowerCase().includes(needle) || r.details.some((d) => d.toLowerCase().includes(`@${needle}`)),
-        ) ?? rows[0];
+        // X inbox rows show display names, not @handles, and only rendered
+        // rows are searchable (virtualized list) — so try several queries:
+        // the X handle, then the GitHub login (often the same person-name).
+        const rowText = (r: ConversationRow) => `${r.title} ${r.details.join(' ')}`.toLowerCase();
+        const needles = [...new Set([handle.toLowerCase(), login.toLowerCase()])];
+        let row: ConversationRow | undefined;
+        for (const q of needles) {
+          const rows = await connector.searchConversations(q);
+          row = rows.find((r) => needles.some((n) => rowText(r).includes(n))) ?? rows[0];
+          if (row) break;
+        }
+        if (!row) {
+          // Last resort: plain substring match over the rendered inbox.
+          const all = await connector.listConversations();
+          row = all.find((r) => needles.some((n) => rowText(r).includes(n)));
+          if (!row) console.info('[opensession] no inbox row matched', needles, '— rendered rows:', all.map((r) => r.title));
+        }
         if (!row) {
           setThread({ phase: 'none' });
           return;
@@ -235,11 +246,24 @@ export function ConversationPane({ connector, handle, login }: { connector: XCha
         convRef.current = row.id;
       }
       const r = await connector.readMessages(conversationId);
+      convRef.current = r.conversationId;
       setThread({ phase: 'loaded', conversationId: r.conversationId, title: r.title, messages: r.messages });
     } catch (e) {
       setThread({ phase: 'error', message: e instanceof Error ? e.message : String(e) });
     }
-  }, [connector, handle]);
+  }, [connector, handle, login]);
+
+  /** Escape hatch: bind to whatever thread is open in the x.com bridge window. */
+  const useOpenThread = useCallback(async () => {
+    setThread({ phase: 'searching' });
+    try {
+      const r = await connector.readMessages();
+      convRef.current = r.conversationId;
+      setThread({ phase: 'loaded', conversationId: r.conversationId, title: r.title, messages: r.messages });
+    } catch (e) {
+      setThread({ phase: 'error', message: e instanceof Error ? e.message : String(e) });
+    }
+  }, [connector]);
 
   useEffect(() => {
     setThread({ phase: 'searching' });
@@ -283,10 +307,14 @@ export function ConversationPane({ connector, handle, login }: { connector: XCha
 
       {thread.phase === 'searching' && <p className="status thread-status">Looking up your DM thread with @{handle}…</p>}
       {thread.phase === 'none' && (
-        <p className="status thread-status">
-          No existing DM conversation with @{handle} —{' '}
-          <a href={`https://x.com/${handle}`} target="_blank" rel="noreferrer">start one on X</a> and it appears here.
-        </p>
+        <div className="thread-status">
+          <p className="status">
+            Couldn't spot a thread with @{handle} in the rendered inbox (X only renders the ~20 most recent rows, by
+            display name). If you have one:{' '}
+            <a href={`https://x.com/${handle}`} target="_blank" rel="noreferrer">open it in the X window</a>, then
+          </p>
+          <button onClick={() => void useOpenThread()}>Use the thread open on X</button>
+        </div>
       )}
       {thread.phase === 'error' && <p className="status error thread-status">{thread.message}</p>}
 
@@ -310,7 +338,12 @@ export function ConversationPane({ connector, handle, login }: { connector: XCha
         }}
       >
         <input
-          placeholder={`Message @${handle}…`}
+          placeholder={
+            thread.phase === 'none'
+              ? 'Composer unlocks once a thread is bound (see above)'
+              : `Message @${handle}…`
+          }
+          title={thread.phase === 'none' ? 'Bind a thread first so the message can’t go to the wrong conversation' : undefined}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           disabled={sending || thread.phase === 'none'}

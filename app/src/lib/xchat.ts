@@ -51,8 +51,10 @@ export class XChatConnector {
       this.pending.delete(d.id);
       clearTimeout(p.timer);
       const text = d.result?.content?.map((c) => c.text ?? '').join('') ?? '';
-      if (d.result?.isError) p.reject(new Error(text || 'tool call failed'));
-      else p.resolve(parseMaybeJson(text));
+      if (d.result?.isError) {
+        console.warn('[opensession] xchat tool error:', text);
+        p.reject(new Error(text || 'tool call failed'));
+      } else p.resolve(parseMaybeJson(text));
     }
   };
 
@@ -102,6 +104,9 @@ export class XChatConnector {
   private setStatus(s: XChatStatus): void {
     if (s.available === this.status.available && s.connected === this.status.connected) return;
     this.status = s;
+    console.info(
+      `[opensession] xchat connector: extension ${s.available ? 'detected' : 'not detected'}, x.com tab ${s.connected ? 'connected' : 'not connected'}`,
+    );
     for (const cb of this.listeners) cb(s);
   }
 
@@ -111,6 +116,7 @@ export class XChatConnector {
     return new Promise<T>((resolve, reject) => {
       const timer = window.setTimeout(() => {
         this.pending.delete(id);
+        console.warn(`[opensession] ${name} timed out after ${timeoutMs}ms`);
         reject(new Error(`${name} timed out — is an x.com tab open and visible?`));
       }, timeoutMs);
       this.pending.set(id, { resolve: resolve as (v: unknown) => void, reject, timer });
@@ -128,12 +134,14 @@ export class XChatConnector {
   }
 
   async searchConversations(query: string): Promise<ConversationRow[]> {
-    const r = await this.call<{ matches?: ConversationRow[]; results?: ConversationRow[] } | ConversationRow[]>(
-      'xchat_search_conversations',
-      { query },
-    );
-    if (Array.isArray(r)) return r;
-    return r.matches ?? r.results ?? [];
+    const r = await this.call<ConversationRow[]>('xchat_search_conversations', { query });
+    return Array.isArray(r) ? r : [];
+  }
+
+  /** Rendered inbox rows (X virtualizes — roughly the visible ~20). */
+  async listConversations(limit = 50): Promise<ConversationRow[]> {
+    const r = await this.call<ConversationRow[]>('xchat_list_conversations', { limit });
+    return Array.isArray(r) ? r : [];
   }
 
   async readMessages(conversationId?: string): Promise<{ conversationId: string; title: string | null; messages: DmMessage[] }> {
