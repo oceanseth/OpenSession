@@ -56,12 +56,35 @@ export class XChatConnector {
     }
   };
 
+  private helloTimer?: number;
+  private onVisible = () => {
+    if (!this.status.available && document.visibilityState === 'visible') this.hello();
+  };
+
   constructor() {
     window.addEventListener('message', this.onMessage);
+    // The extension's content script may load after us (document_idle) — or
+    // we after it. Its load-time beacon covers one direction; retrying hello
+    // for a while covers the other, plus tab-refocus for late installs.
+    this.hello();
+    let tries = 0;
+    this.helloTimer = window.setInterval(() => {
+      if (this.status.available || ++tries > 20) {
+        clearInterval(this.helloTimer);
+        return;
+      }
+      this.hello();
+    }, 1500);
+    document.addEventListener('visibilitychange', this.onVisible);
+  }
+
+  private hello(): void {
     window.postMessage({ xchatos: 'hello' }, window.location.origin);
   }
 
   dispose(): void {
+    clearInterval(this.helloTimer);
+    document.removeEventListener('visibilitychange', this.onVisible);
     window.removeEventListener('message', this.onMessage);
     for (const p of this.pending.values()) {
       clearTimeout(p.timer);

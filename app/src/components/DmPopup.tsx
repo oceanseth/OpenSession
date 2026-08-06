@@ -85,9 +85,22 @@ export function DmPopup({ login, client, token, connector, onClose }: DmPopupPro
               Message @{identity.x_handle} on X
             </a>
             <p className="fine">
-              {xstatus.available
-                ? 'xChatHub detected — open an x.com tab (window visible) and this popup becomes a live DM thread with history.'
-                : 'Install the xChatHub fork to DM without leaving OpenSession.'}
+              {xstatus.available ? (
+                'xChatHub detected — open an x.com tab (window visible) and this popup becomes a live DM thread with history.'
+              ) : (
+                <>
+                  For in-page DMs, install the{' '}
+                  <a
+                    href="https://github.com/oceanseth/xChatHub#install-the-opensession-connected-version-this-fork"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    OpenSession fork of xChatHub
+                  </a>{' '}
+                  (loaded unpacked — the Chrome Web Store build doesn't include the OpenSession connector, so it
+                  isn't detected here even when installed).
+                </>
+              )}
             </p>
           </div>
         )}

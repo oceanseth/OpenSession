@@ -123,9 +123,16 @@ export function Chat({ client, token, myIdentity, connector }: ChatProps) {
             {!xstatus.available && (
               <p className="fine">
                 Install the{' '}
-                <a href="https://github.com/oceanseth/xChatHub" target="_blank" rel="noreferrer">xChatHub fork</a>{' '}
+                <a
+                  href="https://github.com/oceanseth/xChatHub#install-the-opensession-connected-version-this-fork"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  OpenSession fork of xChatHub
+                </a>{' '}
                 to read and send X DMs right here (your browser talks to x.com directly — messages never touch
-                OpenSession servers).
+                OpenSession servers). Note: the Chrome Web Store xChat is the upstream build without the
+                OpenSession connector — the fork must be loaded unpacked.
               </p>
             )}
             {xstatus.available && !xstatus.connected && (
@@ -166,9 +173,21 @@ function PersonCard({ person, xstatus }: { person: Person; xstatus: XChatStatus 
             Message @{person.identity.x_handle} on X
           </a>
           <p className="fine">
-            {xstatus.available
-              ? 'Open an x.com tab (window visible) and this pane becomes a live DM thread.'
-              : 'Install the xChatHub fork to read and send DMs without leaving this page.'}
+            {xstatus.available ? (
+              'Open an x.com tab (window visible) and this pane becomes a live DM thread.'
+            ) : (
+              <>
+                In-page DMs need the{' '}
+                <a
+                  href="https://github.com/oceanseth/xChatHub#install-the-opensession-connected-version-this-fork"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  OpenSession fork
+                </a>{' '}
+                loaded unpacked — the Web Store build lacks the connector.
+              </>
+            )}
           </p>
         </>
       ) : (
