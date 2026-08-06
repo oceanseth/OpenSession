@@ -251,6 +251,7 @@ export default function App() {
             token={token || undefined}
             client={client}
             connector={connector}
+            myIdentity={identity}
             onBack={() => setView({ name: 'tabs' })}
             onOpenThread={(threadId) => {
               setFocusThread(threadId);

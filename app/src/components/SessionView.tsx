@@ -8,6 +8,7 @@ import {
   type ParsedArchive,
   type ParsedSession,
 } from '../lib/opensession';
+import type { Identity } from '../lib/identity';
 import { ThreadsClient, type Thread } from '../lib/threads';
 import type { XChatConnector } from '../lib/xchat';
 import { DmPopup } from './DmPopup';
@@ -19,6 +20,7 @@ interface SessionViewProps {
   token?: string;
   client: GitHubClient;
   connector: XChatConnector;
+  myIdentity?: Identity | null;
   onBack: () => void;
   onOpenThread?: (threadId: string) => void;
 }
@@ -28,7 +30,7 @@ interface SessionViewProps {
  * selected session's turns as a chat transcript on the right, clickable
  * speaker names opening a quick-DM popup.
  */
-export function SessionView({ title, archive, sourceUrl, token, client, connector, onBack, onOpenThread }: SessionViewProps) {
+export function SessionView({ title, archive, sourceUrl, token, client, connector, myIdentity, onBack, onOpenThread }: SessionViewProps) {
   const threadsClient = useMemo(() => (token ? new ThreadsClient(token) : null), [token]);
   const [threadsByTurn, setThreadsByTurn] = useState<Map<string, Thread[]>>(new Map());
   const [selected, setSelected] = useState(() => Math.max(0, archive.sessions.length - 1));
@@ -139,7 +141,14 @@ export function SessionView({ title, archive, sourceUrl, token, client, connecto
       </section>
 
       {dmLogin && token && (
-        <DmPopup login={dmLogin} client={client} token={token} connector={connector} onClose={() => setDmLogin(undefined)} />
+        <DmPopup
+          login={dmLogin}
+          client={client}
+          token={token}
+          connector={connector}
+          myIdentity={myIdentity}
+          onClose={() => setDmLogin(undefined)}
+        />
       )}
     </div>
   );

@@ -109,7 +109,11 @@ export function Chat({ client, token, myIdentity, connector }: ChatProps) {
       </aside>
 
       <section className="chat-pane card">
-        {person?.identity && xstatus.connected ? (
+        {person && myIdentity && person.id === myIdentity.github_id ? (
+          <div className="chat-empty">
+            <p>That's you (@{myIdentity.x_handle}) — pick someone else to start a conversation.</p>
+          </div>
+        ) : person?.identity && xstatus.connected ? (
           <ConversationPane key={person.id} connector={connector} handle={person.identity.x_handle} login={person.login} />
         ) : person ? (
           <PersonCard person={person} xstatus={xstatus} connector={connector} />
@@ -226,10 +230,13 @@ export function ConversationPane({ connector, handle, login }: { connector: XCha
         // the X handle, then the GitHub login (often the same person-name).
         const rowText = (r: ConversationRow) => `${r.title} ${r.details.join(' ')}`.toLowerCase();
         const needles = [...new Set([handle.toLowerCase(), login.toLowerCase()])];
+        // Strict matching only: fuzzy rank returns SOME row for almost any
+        // query (subsequence over long snippets), and its top row is just the
+        // most recent conversation — binding that would show the wrong thread.
         let row: ConversationRow | undefined;
         for (const q of needles) {
           const rows = await connector.searchConversations(q);
-          row = rows.find((r) => needles.some((n) => rowText(r).includes(n))) ?? rows[0];
+          row = rows.find((r) => needles.some((n) => rowText(r).includes(n)));
           if (row) break;
         }
         if (!row) {

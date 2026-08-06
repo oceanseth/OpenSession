@@ -9,6 +9,7 @@ interface DmPopupProps {
   client: GitHubClient;
   token: string;
   connector: XChatConnector;
+  myIdentity?: Identity | null;
   onClose: () => void;
 }
 
@@ -17,7 +18,7 @@ interface DmPopupProps {
  * identity, and when the xChatHub connector reaches an x.com tab, embeds the
  * live DM thread (history + composer) right here.
  */
-export function DmPopup({ login, client, token, connector, onClose }: DmPopupProps) {
+export function DmPopup({ login, client, token, connector, myIdentity, onClose }: DmPopupProps) {
   const [identity, setIdentity] = useState<Identity | null>();
   const [xstatus, setXstatus] = useState<XChatStatus>(connector.status);
 
@@ -66,6 +67,10 @@ export function DmPopup({ login, client, token, connector, onClose }: DmPopupPro
 
         {identity === undefined && <p className="status popup-body">Looking up linked X identity…</p>}
 
+        {identity && myIdentity && identity.github_id === myIdentity.github_id && (
+          <p className="status popup-body">That's you (@{myIdentity.x_handle}) — pick someone else to message.</p>
+        )}
+
         {identity === null && (
           <p className="status popup-body">
             <strong>{login}</strong> hasn't linked an X account on OpenSession — reach them via{' '}
@@ -73,13 +78,13 @@ export function DmPopup({ login, client, token, connector, onClose }: DmPopupPro
           </p>
         )}
 
-        {identity && xstatus.connected && (
+        {identity && !(myIdentity && identity.github_id === myIdentity.github_id) && xstatus.connected && (
           <div className="popup-thread">
             <ConversationPane connector={connector} handle={identity.x_handle} login={login} />
           </div>
         )}
 
-        {identity && !xstatus.connected && (
+        {identity && !(myIdentity && identity.github_id === myIdentity.github_id) && !xstatus.connected && (
           <div className="popup-body">
             <a className="dm-button" href={`https://x.com/${identity.x_handle}`} target="_blank" rel="noreferrer">
               Message @{identity.x_handle} on X
