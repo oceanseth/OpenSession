@@ -130,10 +130,15 @@
   display: flex;
   justify-content: space-between;
   align-items: baseline;
+  gap: 0.8rem;
   padding: 0.8rem 1rem;
   border-bottom: 1px solid var(--border);
   font-weight: 700;
   color: var(--text-h);
+}
+
+.chat-list-head .fine {
+  text-align: right;
 }
 
 .chat-status {
