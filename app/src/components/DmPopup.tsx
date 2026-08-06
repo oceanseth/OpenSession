@@ -84,9 +84,14 @@ export function DmPopup({ login, client, token, connector, onClose }: DmPopupPro
             <a className="dm-button" href={`https://x.com/${identity.x_handle}`} target="_blank" rel="noreferrer">
               Message @{identity.x_handle} on X
             </a>
+            {xstatus.available && (
+              <p>
+                <button onClick={() => connector.openBridge()}>Open the X bridge</button>
+              </p>
+            )}
             <p className="fine">
               {xstatus.available ? (
-                'xChatHub detected — open an x.com tab (window visible) and this popup becomes a live DM thread with history.'
+                'Extension detected — the bridge is a small x.com window (keep it visible on screen); once it connects, this popup becomes a live DM thread with history.'
               ) : (
                 <>
                   For in-page DMs, install the{' '}

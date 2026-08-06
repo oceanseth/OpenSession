@@ -118,6 +118,11 @@ export class XChatConnector {
     });
   }
 
+  /** Ask the extension to open its DM bridge — a small visible x.com popup window. */
+  openBridge(): void {
+    window.postMessage({ xchatos: 'open-bridge' }, window.location.origin);
+  }
+
   whoami(): Promise<{ handle: string }> {
     return this.call('xchat_whoami');
   }

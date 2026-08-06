@@ -112,7 +112,7 @@ export function Chat({ client, token, myIdentity, connector }: ChatProps) {
         {person?.identity && xstatus.connected ? (
           <ConversationPane key={person.id} connector={connector} handle={person.identity.x_handle} login={person.login} />
         ) : person ? (
-          <PersonCard person={person} xstatus={xstatus} />
+          <PersonCard person={person} xstatus={xstatus} connector={connector} />
         ) : (
           <div className="chat-empty">
             <p>
@@ -137,8 +137,9 @@ export function Chat({ client, token, myIdentity, connector }: ChatProps) {
             )}
             {xstatus.available && !xstatus.connected && (
               <p className="fine">
-                xChatHub detected — <a href="https://x.com" target="_blank" rel="noreferrer">open an x.com tab</a>{' '}
-                (keep its window visible) to light up in-page DMs.
+                Extension detected —{' '}
+                <button className="linklike" onClick={() => connector.openBridge()}>open the X bridge</button>{' '}
+                (a small x.com window; keep it visible) to light up in-page DMs.
               </p>
             )}
           </div>
@@ -148,7 +149,7 @@ export function Chat({ client, token, myIdentity, connector }: ChatProps) {
   );
 }
 
-function PersonCard({ person, xstatus }: { person: Person; xstatus: XChatStatus }) {
+function PersonCard({ person, xstatus, connector }: { person: Person; xstatus: XChatStatus; connector: XChatConnector }) {
   return (
     <div className="chat-person">
       <img className="chat-avatar" src={person.avatarUrl} alt="" />
@@ -174,7 +175,10 @@ function PersonCard({ person, xstatus }: { person: Person; xstatus: XChatStatus 
           </a>
           <p className="fine">
             {xstatus.available ? (
-              'Open an x.com tab (window visible) and this pane becomes a live DM thread.'
+              <>
+                <button className="linklike" onClick={() => connector.openBridge()}>Open the X bridge</button> and this
+                pane becomes a live DM thread.
+              </>
             ) : (
               <>
                 In-page DMs need the{' '}
