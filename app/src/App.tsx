@@ -155,7 +155,7 @@ export default function App() {
           <nav>
             <a href="https://github.com/oceanseth/OpenSession" target="_blank" rel="noreferrer">GitHub</a>
             <a
-              href="https://github.com/oceanseth/InfiniteMirror/blob/main/OPEN-SESSION-LICENSE.md"
+              href="https://github.com/oceanseth/OpenSession/blob/main/OPEN-SESSION-LICENSE.md"
               target="_blank"
               rel="noreferrer"
             >
