@@ -226,21 +226,30 @@ a {
   letter-spacing: 0.08em;
 }
 
-.login-tagline {
+.github-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-top: 1.25rem;
+  padding: 0.55rem 1.1rem;
+  font-weight: 600;
+}
+
+.login-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
   color: var(--muted);
-  margin-top: 0;
+  font-size: 0.78rem;
+  margin: 1.25rem 0 0.9rem;
 }
 
-.login-card section {
-  margin-top: 1.75rem;
-  padding-top: 1.5rem;
-  border-top: 1px solid var(--border);
-}
-
-.login-card h3 {
-  margin: 0 0 0.6rem;
-  color: var(--text-h);
-  font-size: 0.95rem;
+.login-divider::before,
+.login-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
 }
 
 .device-code a { color: var(--accent); }
