@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
+import { useSettings } from '../lib/settings';
 import type { BenchReport } from '../types';
-
-const DAYTONA_KEY = 'opensession.desktop.daytona-key';
 
 const BENCHMARKS = [
   {
@@ -22,9 +21,9 @@ const BENCHMARKS = [
 ];
 
 /** Run turn benchmarks for a repo in a Daytona sandbox (or locally) and show the report. */
-export function BenchPanel({ repo }: { repo: string }) {
+export function BenchPanel({ repo, onOpenSettings }: { repo: string; onOpenSettings: () => void }) {
   const [benchmark, setBenchmark] = useState(BENCHMARKS[0].id);
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem(DAYTONA_KEY) ?? '');
+  const { daytonaApiKey } = useSettings();
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState<string>();
   const [report, setReport] = useState<BenchReport | null>(null);
@@ -39,12 +38,11 @@ export function BenchPanel({ repo }: { repo: string }) {
     setReport(null);
     setSavedTo(undefined);
     setProgress(useDaytona ? 'Contacting Daytona…' : 'Running locally…');
-    if (useDaytona) localStorage.setItem(DAYTONA_KEY, apiKey.trim());
     try {
       const r = await window.desktop.runBench({
         repo,
         benchmark,
-        daytonaApiKey: useDaytona ? apiKey.trim() : undefined,
+        daytonaApiKey: useDaytona ? daytonaApiKey : undefined,
       });
       setReport(r);
       setProgress(undefined);
@@ -82,14 +80,17 @@ export function BenchPanel({ repo }: { repo: string }) {
         ))}
       </div>
 
-      <input
-        type="password"
-        placeholder="Daytona API key (dtn_…)"
-        value={apiKey}
-        onChange={(e) => setApiKey(e.target.value)}
-      />
+      {!daytonaApiKey && (
+        <p className="hint">
+          No Daytona API key configured —{' '}
+          <button className="linklike" onClick={onOpenSettings}>
+            add one in Settings
+          </button>{' '}
+          to enable clean-room runs.
+        </p>
+      )}
       <div className="row">
-        <button disabled={running || !apiKey.trim()} onClick={() => void run(true)}>
+        <button className="primary" disabled={running || !daytonaApiKey} onClick={() => void run(true)}>
           Run in Daytona
         </button>
         <button className="ghost" disabled={running} onClick={() => void run(false)}>

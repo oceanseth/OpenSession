@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+import { getSettings, updateSettings } from '../lib/settings';
 import type { DeviceCodeResponse } from '../types';
 
-const CLIENT_ID_KEY = 'opensession.desktop.oauth-client-id';
 const ENV_CLIENT_ID: string | undefined = import.meta.env.VITE_OAUTH_CLIENT_ID;
 
 /**
@@ -10,9 +10,7 @@ const ENV_CLIENT_ID: string | undefined = import.meta.env.VITE_OAUTH_CLIENT_ID;
  * fallback — the same two doors the web feed offers.
  */
 export function Login({ onToken }: { onToken: (t: string) => void }) {
-  const [clientId, setClientId] = useState(
-    () => localStorage.getItem(CLIENT_ID_KEY) ?? ENV_CLIENT_ID ?? '',
-  );
+  const [clientId, setClientId] = useState(() => getSettings().oauthClientId || ENV_CLIENT_ID || '');
   const [device, setDevice] = useState<DeviceCodeResponse | null>(null);
   const [pat, setPat] = useState('');
   const [status, setStatus] = useState<string>();
@@ -21,7 +19,7 @@ export function Login({ onToken }: { onToken: (t: string) => void }) {
   const startDeviceFlow = async () => {
     const id = clientId.trim();
     if (!id) return;
-    localStorage.setItem(CLIENT_ID_KEY, id);
+    updateSettings({ oauthClientId: id });
     setStatus(undefined);
     try {
       setDevice(await window.desktop.deviceStart(id));

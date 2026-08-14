@@ -3,8 +3,10 @@ import { GitHubClient, type Repo } from '@oslib/github';
 import { parseOpenSessionJsonl, type ParsedArchive } from '@oslib/opensession';
 import { BenchPanel } from './components/BenchPanel';
 import { Login } from './components/Login';
+import { SettingsModal } from './components/SettingsModal';
 import { Sidebar } from './components/Sidebar';
 import { TurnStream } from './components/TurnStream';
+import { useSettings } from './lib/settings';
 
 const TOKEN_KEY = 'opensession.desktop.token';
 
@@ -27,7 +29,13 @@ export default function App() {
   const [scanStatus, setScanStatus] = useState<string>();
   const [selection, setSelection] = useState<Selection | null>(null);
   const [benchOpen, setBenchOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settings = useSettings();
   const client = useMemo(() => new GitHubClient(token || undefined), [token]);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = settings.theme;
+  }, [settings.theme]);
 
   const saveToken = (t: string) => {
     setToken(t);
@@ -115,6 +123,8 @@ export default function App() {
 
   if (!token) return <Login onToken={saveToken} />;
 
+  const modal = settingsOpen ? <SettingsModal onClose={() => setSettingsOpen(false)} /> : null;
+
   const selected = selection ? entries.get(selection.repo) : undefined;
   const session = selected?.archive?.sessions[selection?.session ?? 0];
 
@@ -127,6 +137,7 @@ export default function App() {
         selection={selection}
         onOpenRepo={openRepo}
         onSelect={setSelection}
+        onOpenSettings={() => setSettingsOpen(true)}
         onSignOut={() => saveToken('')}
       />
       <div className="main">
@@ -151,7 +162,9 @@ export default function App() {
             </header>
             <div className="content">
               <TurnStream session={session} />
-              {benchOpen && <BenchPanel repo={selection.repo} />}
+              {benchOpen && (
+                <BenchPanel repo={selection.repo} onOpenSettings={() => setSettingsOpen(true)} />
+              )}
             </div>
           </>
         ) : (
@@ -162,6 +175,7 @@ export default function App() {
           </div>
         )}
       </div>
+      {modal}
     </div>
   );
 }

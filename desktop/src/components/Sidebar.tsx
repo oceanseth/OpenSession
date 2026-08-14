@@ -8,6 +8,7 @@ export function Sidebar({
   selection,
   onOpenRepo,
   onSelect,
+  onOpenSettings,
   onSignOut,
 }: {
   viewer: { login: string; avatar_url: string } | null;
@@ -16,6 +17,7 @@ export function Sidebar({
   selection: Selection | null;
   onOpenRepo: (fullName: string) => void;
   onSelect: (s: Selection) => void;
+  onOpenSettings: () => void;
   onSignOut: () => void;
 }) {
   const sorted = [...entries.values()].sort(
@@ -28,15 +30,10 @@ export function Sidebar({
         <span className="wordmark">
           open<span className="accent">session</span>
         </span>
-        {viewer && (
-          <button className="me" title="Sign out" onClick={onSignOut}>
-            <img src={viewer.avatar_url} alt="" />
-            {viewer.login}
-          </button>
-        )}
       </div>
 
       <div className="sidebar-scroll">
+        <div className="sidebar-section">Session repos</div>
         {sorted.map((entry) => {
           const fullName = entry.repo.full_name;
           const isOpen = entry.archive && selection?.repo === fullName;
@@ -58,7 +55,7 @@ export function Sidebar({
                     onClick={() => onSelect({ repo: fullName, session: i })}
                   >
                     <span className="hash">#</span>
-                    {sessionLabel(s, i)}
+                    <span className="channel-name">{sessionLabel(s, i)}</span>
                     <span className="count">{s.messages.length}</span>
                   </button>
                 ))}
@@ -66,6 +63,23 @@ export function Sidebar({
           );
         })}
         {scanStatus && <div className="scan-status">{scanStatus}</div>}
+      </div>
+
+      <div className="sidebar-foot">
+        {viewer && (
+          <div className="user-card">
+            <img src={viewer.avatar_url} alt="" />
+            <span className="user-login">{viewer.login}</span>
+          </div>
+        )}
+        <div className="foot-actions">
+          <button className="foot-btn" onClick={onOpenSettings}>
+            <span aria-hidden="true">⚙</span> Settings
+          </button>
+          <button className="foot-btn danger" onClick={onSignOut}>
+            Log out
+          </button>
+        </div>
       </div>
     </aside>
   );
