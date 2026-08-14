@@ -1,0 +1,31 @@
+{
+  "name": "opensession-desktop",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "OpenSession desktop — Slack-style viewer for llm-turn-history.jsonl repos with Daytona-backed turn benchmarks",
+  "main": "electron/main.mjs",
+  "scripts": {
+    "dev": "concurrently -k \"vite --port 5174\" \"wait-on tcp:5174 && cross-env VITE_DEV_SERVER_URL=http://localhost:5174 electron .\"",
+    "build": "tsc -b && vite build",
+    "start": "electron .",
+    "lint": "oxlint"
+  },
+  "dependencies": {
+    "@daytonaio/sdk": "^0.27.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.3",
+    "concurrently": "^9.1.2",
+    "cross-env": "^10.0.0",
+    "electron": "^37.2.0",
+    "oxlint": "^1.71.0",
+    "typescript": "~6.0.2",
+    "vite": "^8.1.1",
+    "wait-on": "^9.0.1"
+  }
+}
