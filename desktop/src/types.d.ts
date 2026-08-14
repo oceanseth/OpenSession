@@ -46,9 +46,16 @@ export interface BenchReport {
   findings: BenchFinding[];
 }
 
+export interface ApiResponse {
+  ok: boolean;
+  status: number;
+  data: unknown;
+}
+
 export interface DesktopBridge {
   deviceStart(clientId: string): Promise<DeviceCodeResponse>;
   devicePoll(clientId: string, deviceCode: string): Promise<DevicePollResponse>;
+  apiFetch(method: string, path: string, token: string, body?: unknown): Promise<ApiResponse>;
   runBench(params: {
     repo: string;
     benchmark: string;

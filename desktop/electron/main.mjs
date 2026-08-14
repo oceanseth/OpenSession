@@ -168,6 +168,25 @@ ipcMain.handle('report:save', async (event, report) => {
 
 ipcMain.handle('shell:open', (_e, url) => shell.openExternal(url));
 
+// ── Registry/threads API proxy ─────────────────────────────────────
+// The renderer is a file:// origin the API gateway's CORS allowlist
+// doesn't cover; main-process fetch has no CORS, so proxy through IPC.
+
+const API_BASE = 'https://r1q8b3li40.execute-api.us-east-1.amazonaws.com/api';
+
+ipcMain.handle('api:fetch', async (_e, { method, path, token, body }) => {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method,
+    headers: {
+      authorization: `Bearer ${token}`,
+      ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
+    },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  const data = await res.json().catch(() => ({}));
+  return { ok: res.ok, status: res.status, data };
+});
+
 app.whenReady().then(() => {
   createWindow();
   app.on('activate', () => {

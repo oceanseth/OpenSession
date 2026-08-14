@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('desktop', {
   runBench: (params) => ipcRenderer.invoke('bench:run', params),
   saveReport: (report) => ipcRenderer.invoke('report:save', report),
   openExternal: (url) => ipcRenderer.invoke('shell:open', url),
+  apiFetch: (method, path, token, body) => ipcRenderer.invoke('api:fetch', { method, path, token, body }),
   onBenchProgress: (cb) => {
     const listener = (_e, message) => cb(message);
     ipcRenderer.on('bench:progress', listener);
