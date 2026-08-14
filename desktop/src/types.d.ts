@@ -33,7 +33,7 @@ export interface BenchReport {
   benchmarkDescription: string;
   startedAt: string;
   finishedAt: string;
-  runner?: { kind: 'daytona' | 'local'; sandboxId?: string };
+  runner?: { kind: 'daytona' | 'local' | 'rocketride'; sandboxId?: string };
   summary: {
     sessions: number;
     turns: number;
@@ -60,7 +60,10 @@ export interface DesktopBridge {
     repo: string;
     benchmark: string;
     branch?: string;
+    runner?: 'daytona' | 'local' | 'rocketride';
     daytonaApiKey?: string;
+    rocketrideApiKey?: string;
+    rocketrideUri?: string;
   }): Promise<BenchReport>;
   saveReport(report: BenchReport): Promise<string | null>;
   openExternal(url: string): Promise<void>;

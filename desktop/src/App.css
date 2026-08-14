@@ -615,6 +615,53 @@ a {
   font-size: 0.85rem;
 }
 
+.header-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.good-text { color: var(--good); }
+
+.scan-summary {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.scan-stat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.6rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 0.72rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.scan-stat.hit {
+  border-color: var(--bad);
+  color: var(--text-h);
+}
+
+.scan-n {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--text-h);
+}
+
+.scan-stat.hit .scan-n { color: var(--bad); }
+
+.leak-preview {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-top: 0.15rem;
+  overflow-wrap: anywhere;
+}
+
 .bench-list {
   display: flex;
   flex-direction: column;

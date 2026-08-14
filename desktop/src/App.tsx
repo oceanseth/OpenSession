@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GitHubClient, type Repo } from '@oslib/github';
 import { parseOpenSessionJsonl, type ParsedArchive } from '@oslib/opensession';
 import { BenchPanel } from './components/BenchPanel';
+import { LeakScanPanel } from './components/LeakScanPanel';
 import { Login } from './components/Login';
 import { SettingsModal } from './components/SettingsModal';
 import { Sidebar } from './components/Sidebar';
@@ -35,6 +36,7 @@ export default function App() {
   const [selection, setSelection] = useState<Selection | null>(null);
   const [mainView, setMainView] = useState<'session' | 'threads'>('session');
   const [benchOpen, setBenchOpen] = useState(false);
+  const [scanOpen, setScanOpen] = useState(false);
   const [threadView, setThreadView] = useState<ThreadView | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [threadsByRepo, setThreadsByRepo] = useState<Map<string, Thread[]>>(new Map());
@@ -239,6 +241,8 @@ export default function App() {
         onClose={() => setThreadView(null)}
         onThreadsChanged={loadRepoThreads}
       />
+    ) : scanOpen && selection ? (
+      <LeakScanPanel repo={selection.repo} token={token} />
     ) : benchOpen && selection ? (
       <BenchPanel repo={selection.repo} onOpenSettings={() => setSettingsOpen(true)} />
     ) : null;
@@ -283,9 +287,28 @@ export default function App() {
                   {session.session.tool ? ` · ${session.session.tool}` : ''}
                 </span>
               </div>
-              <button className="bench-toggle" onClick={() => setBenchOpen((v) => !v)}>
-                {benchOpen && !threadView ? 'Hide benchmarks' : '⚡ Benchmarks'}
-              </button>
+              <div className="header-actions">
+                <button
+                  className="bench-toggle"
+                  onClick={() => {
+                    setScanOpen((v) => !v);
+                    setBenchOpen(false);
+                    setThreadView(null);
+                  }}
+                >
+                  {scanOpen && !threadView ? 'Hide scan' : '🛡 Leak scan'}
+                </button>
+                <button
+                  className="bench-toggle"
+                  onClick={() => {
+                    setBenchOpen((v) => !v);
+                    setScanOpen(false);
+                    setThreadView(null);
+                  }}
+                >
+                  {benchOpen && !threadView && !scanOpen ? 'Hide benchmarks' : '⚡ Benchmarks'}
+                </button>
+              </div>
             </header>
             <div className="content">
               <TurnStream

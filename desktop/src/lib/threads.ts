@@ -4,6 +4,7 @@
  * (window.desktop.apiFetch) because the renderer's file:// origin is not
  * on the gateway's CORS allowlist.
  */
+import { sanitize } from '../../scan/leakscan.mjs';
 import type { NewThread, Post, Thread } from '@oslib/threads';
 
 export type { NewThread, Post, Thread };
@@ -34,7 +35,10 @@ export class DesktopThreadsClient {
   }
 
   async create(t: NewThread): Promise<Thread> {
-    const thread = (await call<{ thread: Thread }>(this.token, 'POST', '/threads', t)).thread;
+    // Sanitize the turn excerpt before it lands in our store: strip encrypted
+    // reasoning envelopes and redact secrets the model's own pass may miss.
+    const payload = { ...t, turn_excerpt: sanitize(t.turn_excerpt).text };
+    const thread = (await call<{ thread: Thread }>(this.token, 'POST', '/threads', payload)).thread;
     markEngaged(thread.id);
     return thread;
   }

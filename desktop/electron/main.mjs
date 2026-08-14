@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const BENCH_SCRIPT = join(here, '..', 'bench', 'run-bench.mjs');
+const ROCKETRIDE_RUNNER = join(here, '..', 'rocketride', 'run_heuristics.py');
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -143,16 +144,43 @@ async function runDaytona(params, apiKey, progress) {
   }
 }
 
-ipcMain.handle('bench:run', async (event, { repo, benchmark, branch, daytonaApiKey }) => {
-  const progress = (message) => event.sender.send('bench:progress', message);
-  if (daytonaApiKey) {
-    return runDaytona({ repo, benchmark, branch }, daytonaApiKey, progress);
-  }
-  progress('No Daytona key — running locally.');
-  const report = await runLocal({ repo, benchmark, branch });
-  report.runner = { kind: 'local' };
-  return report;
-});
+async function runRocketRide(params, apiKey, uri, progress) {
+  progress('Sending pipeline to RocketRide Cloud…');
+  return new Promise((resolve, reject) => {
+    execFile(
+      'python3',
+      [ROCKETRIDE_RUNNER, params.repo, params.benchmark, params.branch ?? 'HEAD'],
+      {
+        env: { ...process.env, ROCKETRIDE_APIKEY: apiKey, ROCKETRIDE_URI: uri },
+        timeout: 5 * 60_000,
+        maxBuffer: 32 * 1024 * 1024,
+      },
+      (err, stdout, stderr) => {
+        if (err) reject(new Error(`RocketRide run failed: ${stderr || err.message}`));
+        else resolve(JSON.parse(stdout));
+      },
+    );
+  });
+}
+
+ipcMain.handle(
+  'bench:run',
+  async (event, { repo, benchmark, branch, runner, daytonaApiKey, rocketrideApiKey, rocketrideUri }) => {
+    const progress = (message) => event.sender.send('bench:progress', message);
+    if (runner === 'rocketride') {
+      if (!rocketrideApiKey) throw new Error('No RocketRide API key set — add one in Settings.');
+      return runRocketRide({ repo, benchmark, branch }, rocketrideApiKey, rocketrideUri, progress);
+    }
+    if (runner === 'daytona' || (runner === undefined && daytonaApiKey)) {
+      if (!daytonaApiKey) throw new Error('No Daytona API key set — add one in Settings.');
+      return runDaytona({ repo, benchmark, branch }, daytonaApiKey, progress);
+    }
+    progress('Running locally.');
+    const report = await runLocal({ repo, benchmark, branch });
+    report.runner = { kind: 'local' };
+    return report;
+  },
+);
 
 ipcMain.handle('report:save', async (event, report) => {
   const win = BrowserWindow.fromWebContents(event.sender);

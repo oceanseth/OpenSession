@@ -65,6 +65,22 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 
         <section className="setting">
           <div className="setting-label">
+            <strong>RocketRide API key</strong>
+            <span>
+              Runs the turn-heuristics pipeline (grounded LLM judge) on RocketRide Cloud. Stored
+              locally. Sign in at cloud.rocketride.ai to get a key.
+            </span>
+          </div>
+          <input
+            type="password"
+            placeholder="RocketRide API key"
+            value={settings.rocketrideApiKey}
+            onChange={(e) => updateSettings({ rocketrideApiKey: e.target.value.trim() })}
+          />
+        </section>
+
+        <section className="setting">
+          <div className="setting-label">
             <strong>GitHub OAuth client id</strong>
             <span>
               Optional — enables device-flow sign-in. Leave blank to use a personal access token.
