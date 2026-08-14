@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "concurrently -k \"vite --port 5174\" \"wait-on tcp:5174 && cross-env VITE_DEV_SERVER_URL=http://localhost:5174 electron .\"",
     "build": "tsc -b && vite build",
+    "prestart": "npm run build",
     "start": "electron .",
     "lint": "oxlint"
   },

@@ -8,6 +8,7 @@
  */
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import { execFile } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -32,7 +33,24 @@ function createWindow() {
   if (process.env.VITE_DEV_SERVER_URL) {
     void win.loadURL(process.env.VITE_DEV_SERVER_URL);
   } else {
-    void win.loadFile(join(here, '..', 'dist', 'index.html'));
+    const index = join(here, '..', 'dist', 'index.html');
+    if (existsSync(index)) {
+      void win.loadFile(index);
+    } else {
+      // dist/ is gitignored — a fresh checkout has no renderer bundle yet.
+      // `npm start` builds it via prestart; explain instead of going blank
+      // in case electron was invoked directly.
+      void win.loadURL(
+        'data:text/html;charset=utf-8,' +
+          encodeURIComponent(
+            '<body style="margin:0;display:grid;place-items:center;height:100vh;' +
+              'background:#0e1320;color:#c6cfe2;font-family:system-ui">' +
+              '<div style="text-align:center"><h2 style="color:#eef2fb">Renderer not built yet</h2>' +
+              '<p>Run <code style="color:#4d9fff">npm start</code> (builds, then launches)<br>' +
+              'or <code style="color:#4d9fff">npm run dev</code> for live reload.</p></div></body>',
+          ),
+      );
+    }
   }
   // External links open in the system browser, not new Electron windows.
   win.webContents.setWindowOpenHandler(({ url }) => {
