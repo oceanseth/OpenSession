@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const BENCH_SCRIPT = join(here, '..', 'bench', 'run-bench.mjs');
-const ROCKETRIDE_RUNNER = join(here, '..', 'rocketride', 'run_heuristics.py');
+const PIPE_FILE = join(here, '..', 'rocketride', 'heuristics.pipe.json');
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -121,10 +121,15 @@ async function runDaytona(params, apiKey, progress) {
     progress(`Sandbox ${sandboxId} up — uploading bench script`);
     const script = await readFile(BENCH_SCRIPT, 'utf8');
     const b64 = Buffer.from(script, 'utf8').toString('base64');
-    await sandbox.process.executeCommand(`printf '%s' '${b64}' | base64 -d > /tmp/run-bench.mjs`);
+    // Pass an explicit cwd on every exec: without it the SDK resolves the
+    // sandbox root via a toolbox endpoint that 404s on the managed backend
+    // ("Cannot GET …/toolbox/project-dir"). /tmp always exists and is writable.
+    const CWD = '/tmp';
+    await sandbox.process.executeCommand(`printf '%s' '${b64}' | base64 -d > /tmp/run-bench.mjs`, CWD);
     progress('Running benchmark in sandbox…');
     const res = await sandbox.process.executeCommand(
       `node /tmp/run-bench.mjs ${benchArgs(params).map((a) => `'${a}'`).join(' ')}`,
+      CWD,
     );
     const out = res.result ?? res.stdout ?? '';
     if (res.exitCode !== undefined && res.exitCode !== 0) {
@@ -145,22 +150,49 @@ async function runDaytona(params, apiKey, progress) {
 }
 
 async function runRocketRide(params, apiKey, uri, progress) {
-  progress('Sending pipeline to RocketRide Cloud…');
-  return new Promise((resolve, reject) => {
-    execFile(
-      'python3',
-      [ROCKETRIDE_RUNNER, params.repo, params.benchmark, params.branch ?? 'HEAD'],
-      {
-        env: { ...process.env, ROCKETRIDE_APIKEY: apiKey, ROCKETRIDE_URI: uri },
-        timeout: 5 * 60_000,
-        maxBuffer: 32 * 1024 * 1024,
-      },
-      (err, stdout, stderr) => {
-        if (err) reject(new Error(`RocketRide run failed: ${stderr || err.message}`));
-        else resolve(JSON.parse(stdout));
-      },
+  // Uses the bundled `rocketride` JS SDK — no Python/pip needed. WebSocket
+  // transport, so this runs from the main process (renderer is file://).
+  const rr = await import('rocketride');
+  const RocketRideClient = rr.RocketRideClient ?? rr.default?.RocketRideClient;
+  if (!RocketRideClient) throw new Error('rocketride SDK: RocketRideClient export not found');
+  const branch = params.branch ?? 'HEAD';
+  progress('Fetching session history…');
+  const historyRes = await fetch(
+    `https://raw.githubusercontent.com/${params.repo}/${encodeURIComponent(branch)}/llm-turn-history.jsonl`,
+  );
+  if (!historyRes.ok) throw new Error(`history fetch ${historyRes.status} for ${params.repo}`);
+  const history = await historyRes.text();
+
+  const client = new RocketRideClient({ auth: apiKey, uri: uri || 'https://cloud.rocketride.ai' });
+  progress('Connecting to RocketRide Cloud…');
+  let token;
+  try {
+    const started = await client.use({ filepath: PIPE_FILE });
+    token = started.token;
+    progress('Running heuristics pipeline…');
+    const raw = await client.send(
+      token,
+      JSON.stringify({ repo: params.repo, benchmark: params.benchmark, history }),
+      { name: 'input.json' },
+      'application/json',
     );
-  });
+    const report =
+      typeof raw === 'string'
+        ? JSON.parse(raw)
+        : (raw?.result ?? raw?.data?.result ?? raw?.data ?? raw);
+    if (!report || typeof report !== 'object' || !report.summary) {
+      throw new Error(`unexpected pipeline result: ${JSON.stringify(raw).slice(0, 400)}`);
+    }
+    report.runner = { kind: 'rocketride' };
+    return report;
+  } finally {
+    try {
+      if (token) await client.terminate(token);
+      await client.disconnect();
+    } catch {
+      /* best-effort teardown */
+    }
+  }
 }
 
 ipcMain.handle(
