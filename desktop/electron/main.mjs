@@ -167,6 +167,9 @@ async function runRocketRide(params, apiKey, uri, progress) {
   progress('Connecting to RocketRide Cloud…');
   let token;
   try {
+    // connect() attaches the WebSocket and logs in with the stored API key;
+    // use()/send() throw "Server is not connected" without it.
+    await client.connect();
     const started = await client.use({ filepath: PIPE_FILE });
     token = started.token;
     progress('Running heuristics pipeline…');
