@@ -10,6 +10,8 @@ export type Theme = 'dark' | 'light';
 export interface Settings {
   theme: Theme;
   daytonaApiKey: string;
+  rocketrideApiKey: string;
+  rocketrideUri: string;
   oauthClientId: string;
 }
 
@@ -19,7 +21,13 @@ const KEY = 'opensession.desktop.settings';
 const LEGACY_DAYTONA_KEY = 'opensession.desktop.daytona-key';
 const LEGACY_CLIENT_ID_KEY = 'opensession.desktop.oauth-client-id';
 
-const DEFAULTS: Settings = { theme: 'dark', daytonaApiKey: '', oauthClientId: '' };
+const DEFAULTS: Settings = {
+  theme: 'dark',
+  daytonaApiKey: '',
+  rocketrideApiKey: '',
+  rocketrideUri: 'https://cloud.rocketride.ai',
+  oauthClientId: '',
+};
 
 function load(): Settings {
   let stored: Partial<Settings> = {};

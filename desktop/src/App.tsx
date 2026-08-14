@@ -1,17 +1,23 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GitHubClient, type Repo } from '@oslib/github';
 import { parseOpenSessionJsonl, type ParsedArchive } from '@oslib/opensession';
 import { BenchPanel } from './components/BenchPanel';
+import { LeakScanPanel } from './components/LeakScanPanel';
 import { Login } from './components/Login';
 import { SettingsModal } from './components/SettingsModal';
 import { Sidebar } from './components/Sidebar';
+import { ThreadPanel, type ThreadView } from './components/ThreadPanel';
 import { TurnStream } from './components/TurnStream';
+import { markSeen, seenCount, sessionKey } from './lib/seen';
 import { useSettings } from './lib/settings';
+import { DesktopThreadsClient, type Thread } from './lib/threads';
 
 const TOKEN_KEY = 'opensession.desktop.token';
+const POLL_MS = 30_000;
 
 export interface RepoEntry {
   repo: Repo;
+  sha?: string; // history file blob sha — change means new turns
   archive?: ParsedArchive;
   loading?: boolean;
   error?: string;
@@ -28,14 +34,44 @@ export default function App() {
   const [entries, setEntries] = useState<Map<string, RepoEntry>>(new Map());
   const [scanStatus, setScanStatus] = useState<string>();
   const [selection, setSelection] = useState<Selection | null>(null);
+  const [mainView, setMainView] = useState<'session' | 'threads'>('session');
   const [benchOpen, setBenchOpen] = useState(false);
+  const [scanOpen, setScanOpen] = useState(false);
+  const [threadView, setThreadView] = useState<ThreadView | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [threadsByRepo, setThreadsByRepo] = useState<Map<string, Thread[]>>(new Map());
+  const [flashing, setFlashing] = useState<Set<string>>(new Set());
+  const [, bumpSeen] = useState(0); // re-render after markSeen writes
   const settings = useSettings();
   const client = useMemo(() => new GitHubClient(token || undefined), [token]);
+  const threadsClient = useMemo(() => (token ? new DesktopThreadsClient(token) : null), [token]);
+  const entriesRef = useRef(entries);
+  entriesRef.current = entries;
 
   useEffect(() => {
     document.documentElement.dataset.theme = settings.theme;
   }, [settings.theme]);
+
+  const loadRepoThreads = useCallback(
+    (fullName: string) => {
+      if (!threadsClient) return;
+      threadsClient
+        .list(fullName)
+        .then((ts) => setThreadsByRepo((prev) => new Map(prev).set(fullName, ts)))
+        .catch(() => {
+          /* threads are additive — a failed load never blocks the turn stream */
+        });
+    },
+    [threadsClient],
+  );
+
+  const fetchArchive = useCallback(
+    async (fullName: string): Promise<ParsedArchive> => {
+      const text = await client.fetchHistoryFile(fullName);
+      return parseOpenSessionJsonl(text);
+    },
+    [client],
+  );
 
   const saveToken = (t: string) => {
     setToken(t);
@@ -44,6 +80,8 @@ export default function App() {
     setEntries(new Map());
     setSelection(null);
     setViewer(null);
+    setThreadView(null);
+    setMainView('session');
   };
 
   // Scan starred repos for llm-turn-history.jsonl (same probe the web feed uses).
@@ -69,7 +107,7 @@ export default function App() {
               const probe = await client.probeHistory(repo.full_name);
               if (probe && !cancelled) {
                 found++;
-                setEntries((prev) => new Map(prev).set(repo.full_name, { repo }));
+                setEntries((prev) => new Map(prev).set(repo.full_name, { repo, sha: probe.sha }));
                 setScanStatus(`Probing… ${found} session repo${found === 1 ? '' : 's'} found`);
               }
             }
@@ -93,40 +131,121 @@ export default function App() {
     };
   }, [client, token]);
 
+  // Live updates: poll history-file shas; changed sha → refetch turns, flash the repo.
+  useEffect(() => {
+    if (!token) return;
+    const timer = setInterval(() => {
+      for (const [fullName, entry] of entriesRef.current) {
+        void client.probeHistory(fullName).then(async (probe) => {
+          if (!probe || probe.sha === entry.sha) return;
+          const archive = entry.archive ? await fetchArchive(fullName).catch(() => undefined) : undefined;
+          setEntries((prev) => {
+            const cur = prev.get(fullName);
+            if (!cur) return prev;
+            return new Map(prev).set(fullName, {
+              ...cur,
+              sha: probe.sha,
+              archive: archive ?? cur.archive,
+            });
+          });
+          setFlashing((prev) => new Set(prev).add(fullName));
+          setTimeout(
+            () =>
+              setFlashing((prev) => {
+                const next = new Set(prev);
+                next.delete(fullName);
+                return next;
+              }),
+            4000,
+          );
+        });
+      }
+    }, POLL_MS);
+    return () => clearInterval(timer);
+  }, [client, fetchArchive, token]);
+
   const openRepo = useCallback(
     (fullName: string) => {
-      const entry = entries.get(fullName);
+      const entry = entriesRef.current.get(fullName);
       if (!entry || entry.loading) return;
+      setMainView('session');
       if (entry.archive) {
         setSelection({ repo: fullName, session: 0 });
         return;
       }
       setEntries((prev) => new Map(prev).set(fullName, { ...entry, loading: true, error: undefined }));
-      void client
-        .fetchHistoryFile(fullName)
-        .then((text) => {
-          const archive = parseOpenSessionJsonl(text);
-          setEntries((prev) => new Map(prev).set(fullName, { repo: entry.repo, archive }));
+      loadRepoThreads(fullName);
+      void fetchArchive(fullName)
+        .then((archive) => {
+          setEntries((prev) => new Map(prev).set(fullName, { repo: entry.repo, sha: entry.sha, archive }));
           setSelection({ repo: fullName, session: Math.max(0, archive.sessions.length - 1) });
         })
         .catch((e) => {
           setEntries((prev) =>
             new Map(prev).set(fullName, {
               repo: entry.repo,
+              sha: entry.sha,
               error: e instanceof Error ? e.message : String(e),
             }),
           );
         });
     },
-    [client, entries],
+    [fetchArchive, loadRepoThreads],
   );
-
-  if (!token) return <Login onToken={saveToken} />;
-
-  const modal = settingsOpen ? <SettingsModal onClose={() => setSettingsOpen(false)} /> : null;
 
   const selected = selection ? entries.get(selection.repo) : undefined;
   const session = selected?.archive?.sessions[selection?.session ?? 0];
+
+  // Viewing a session marks its turns seen.
+  useEffect(() => {
+    if (!selection || !session || mainView !== 'session') return;
+    markSeen(
+      sessionKey(selection.repo, session.session.sid, selection.session),
+      session.messages.length,
+    );
+    bumpSeen((n) => n + 1);
+  }, [selection, session, mainView]);
+
+  // Unseen turns per repo/session, derived from loaded archives.
+  const unseen = useMemo(() => {
+    const bySession = new Map<string, number>();
+    const byRepo = new Map<string, number>();
+    for (const [fullName, entry] of entries) {
+      if (!entry.archive) continue;
+      let repoTotal = 0;
+      entry.archive.sessions.forEach((s, i) => {
+        const key = sessionKey(fullName, s.session.sid, i);
+        const n = Math.max(0, s.messages.length - seenCount(key));
+        bySession.set(key, n);
+        repoTotal += n;
+      });
+      byRepo.set(fullName, repoTotal);
+    }
+    return { bySession, byRepo };
+  }, [entries]);
+
+  if (!token) return <Login onToken={saveToken} />;
+
+  const repoThreads = selection ? (threadsByRepo.get(selection.repo) ?? []) : [];
+  const threadsByTurn = new Map<string, Thread[]>();
+  for (const t of repoThreads) {
+    threadsByTurn.set(t.turn_id, [...(threadsByTurn.get(t.turn_id) ?? []), t]);
+  }
+
+  const rightRail =
+    threadView && threadsClient ? (
+      <ThreadPanel
+        client={threadsClient}
+        view={threadView}
+        onView={setThreadView}
+        onClose={() => setThreadView(null)}
+        onThreadsChanged={loadRepoThreads}
+      />
+    ) : scanOpen && selection ? (
+      <LeakScanPanel repo={selection.repo} token={token} />
+    ) : benchOpen && selection ? (
+      <BenchPanel repo={selection.repo} onOpenSettings={() => setSettingsOpen(true)} />
+    ) : null;
 
   return (
     <div className="shell">
@@ -134,14 +253,26 @@ export default function App() {
         viewer={viewer}
         entries={entries}
         scanStatus={scanStatus}
-        selection={selection}
+        selection={mainView === 'session' ? selection : null}
+        unseenByRepo={unseen.byRepo}
+        unseenBySession={unseen.bySession}
+        flashing={flashing}
+        threadsClient={threadsClient}
         onOpenRepo={openRepo}
-        onSelect={setSelection}
+        onSelect={(s) => {
+          setMainView('session');
+          setSelection(s);
+        }}
+        onOpenThreads={() => {
+          setMainView('threads');
+          setThreadView({ kind: 'global' });
+        }}
+        onOpenThread={(id) => setThreadView({ kind: 'detail', id })}
         onOpenSettings={() => setSettingsOpen(true)}
         onSignOut={() => saveToken('')}
       />
       <div className="main">
-        {selection && selected?.archive && session ? (
+        {mainView === 'session' && selection && selected?.archive && session ? (
           <>
             <header className="channel-header">
               <div>
@@ -156,26 +287,58 @@ export default function App() {
                   {session.session.tool ? ` · ${session.session.tool}` : ''}
                 </span>
               </div>
-              <button className="bench-toggle" onClick={() => setBenchOpen((v) => !v)}>
-                {benchOpen ? 'Hide benchmarks' : '⚡ Benchmarks'}
-              </button>
+              <div className="header-actions">
+                <button
+                  className="bench-toggle"
+                  onClick={() => {
+                    setScanOpen((v) => !v);
+                    setBenchOpen(false);
+                    setThreadView(null);
+                  }}
+                >
+                  {scanOpen && !threadView ? 'Hide scan' : '🛡 Leak scan'}
+                </button>
+                <button
+                  className="bench-toggle"
+                  onClick={() => {
+                    setBenchOpen((v) => !v);
+                    setScanOpen(false);
+                    setThreadView(null);
+                  }}
+                >
+                  {benchOpen && !threadView && !scanOpen ? 'Hide benchmarks' : '⚡ Benchmarks'}
+                </button>
+              </div>
             </header>
             <div className="content">
-              <TurnStream session={session} />
-              {benchOpen && (
-                <BenchPanel repo={selection.repo} onOpenSettings={() => setSettingsOpen(true)} />
-              )}
+              <TurnStream
+                session={session}
+                threadsByTurn={threadsByTurn}
+                onOpenThread={(id) => setThreadView({ kind: 'detail', id })}
+                onDiscuss={(turn) =>
+                  setThreadView({ kind: 'new', repo: selection.repo, turn })
+                }
+              />
+              {rightRail}
             </div>
           </>
+        ) : mainView === 'threads' ? (
+          <div className="content">
+            <div className="empty">Global discussions — pick a thread on the right.</div>
+            {rightRail}
+          </div>
         ) : (
-          <div className="empty">
-            {selected?.loading
-              ? `Loading ${selection?.repo}…`
-              : (selected?.error ?? 'Pick a repo on the left — its sessions appear as channels.')}
+          <div className="content">
+            <div className="empty">
+              {selected?.loading
+                ? `Loading ${selection?.repo}…`
+                : (selected?.error ?? 'Pick a repo on the left — its sessions appear as channels.')}
+            </div>
+            {rightRail}
           </div>
         )}
       </div>
-      {modal}
+      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
     </div>
   );
 }

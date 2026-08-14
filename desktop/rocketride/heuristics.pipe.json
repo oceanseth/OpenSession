@@ -1,0 +1,51 @@
+{
+  "name": "opensession-turn-heuristics",
+  "version": "0.1.0",
+  "description": "Scores the turns of an OpenSession llm-turn-history.jsonl archive: deterministic heuristics for structure/stats/delusion, then an optional grounded LLM judge over the turns a heuristic flagged.",
+  "input": {
+    "repo": "string (owner/name)",
+    "benchmark": "structure-integrity | turn-stats | delusion-heuristic | all",
+    "history": "string (raw llm-turn-history.jsonl)"
+  },
+  "nodes": [
+    {
+      "id": "parse",
+      "type": "code.js",
+      "comment": "Parse open-session-jsonl with (ts,id) ordering + id dedupe.",
+      "entry": "bench/run-bench.mjs:parse"
+    },
+    {
+      "id": "heuristics",
+      "type": "code.js",
+      "comment": "Run the selected deterministic benchmark(s) over parsed turns.",
+      "entry": "bench/run-bench.mjs:score",
+      "in": ["parse"]
+    },
+    {
+      "id": "ground",
+      "type": "tool.linkup",
+      "comment": "Grounding: web-search factual claims in delusion-flagged turns.",
+      "in": ["heuristics"],
+      "when": "benchmark == 'delusion-heuristic' || benchmark == 'all'",
+      "params": { "depth": "standard", "max_results": 3 }
+    },
+    {
+      "id": "judge",
+      "type": "llm.chat",
+      "comment": "Grounded judge: is a flagged turn a real delusion or a false positive?",
+      "in": ["heuristics", "ground"],
+      "when": "heuristics.flagged > 0",
+      "model": "${JUDGE_MODEL:-claude-fable-5}",
+      "expectJson": true,
+      "instruction": "For each flagged turn you are given the turn text, its discussion thread, and grounding search results. Decide verdict = 'confirmed-delusion' or 'refuted', with a one-sentence reason citing the grounding. Return {\"verdicts\":[{\"turnId\":str,\"verdict\":str,\"reason\":str}]}."
+    },
+    {
+      "id": "report",
+      "type": "code.js",
+      "comment": "Merge heuristic scores + judge verdicts into an opensession-bench-report/v0 object.",
+      "entry": "bench/run-bench.mjs:report",
+      "in": ["heuristics", "judge"]
+    }
+  ],
+  "output": "report"
+}

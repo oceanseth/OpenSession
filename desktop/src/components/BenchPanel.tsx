@@ -23,7 +23,7 @@ const BENCHMARKS = [
 /** Run turn benchmarks for a repo in a Daytona sandbox (or locally) and show the report. */
 export function BenchPanel({ repo, onOpenSettings }: { repo: string; onOpenSettings: () => void }) {
   const [benchmark, setBenchmark] = useState(BENCHMARKS[0].id);
-  const { daytonaApiKey } = useSettings();
+  const { daytonaApiKey, rocketrideApiKey, rocketrideUri } = useSettings();
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState<string>();
   const [report, setReport] = useState<BenchReport | null>(null);
@@ -32,17 +32,20 @@ export function BenchPanel({ repo, onOpenSettings }: { repo: string; onOpenSetti
 
   useEffect(() => window.desktop.onBenchProgress(setProgress), []);
 
-  const run = async (useDaytona: boolean) => {
+  const run = async (runner: 'daytona' | 'local' | 'rocketride') => {
     setRunning(true);
     setError(undefined);
     setReport(null);
     setSavedTo(undefined);
-    setProgress(useDaytona ? 'Contacting Daytona…' : 'Running locally…');
+    setProgress('Starting…');
     try {
       const r = await window.desktop.runBench({
         repo,
         benchmark,
-        daytonaApiKey: useDaytona ? daytonaApiKey : undefined,
+        runner,
+        daytonaApiKey: runner === 'daytona' ? daytonaApiKey : undefined,
+        rocketrideApiKey: runner === 'rocketride' ? rocketrideApiKey : undefined,
+        rocketrideUri: runner === 'rocketride' ? rocketrideUri : undefined,
       });
       setReport(r);
       setProgress(undefined);
@@ -80,20 +83,28 @@ export function BenchPanel({ repo, onOpenSettings }: { repo: string; onOpenSetti
         ))}
       </div>
 
-      {!daytonaApiKey && (
+      {!daytonaApiKey && !rocketrideApiKey && (
         <p className="hint">
-          No Daytona API key configured —{' '}
+          No Daytona or RocketRide key configured —{' '}
           <button className="linklike" onClick={onOpenSettings}>
             add one in Settings
           </button>{' '}
-          to enable clean-room runs.
+          to enable cloud runs.
         </p>
       )}
       <div className="row">
-        <button className="primary" disabled={running || !daytonaApiKey} onClick={() => void run(true)}>
+        <button className="primary" disabled={running || !daytonaApiKey} onClick={() => void run('daytona')}>
           Run in Daytona
         </button>
-        <button className="ghost" disabled={running} onClick={() => void run(false)}>
+        <button
+          className="primary"
+          disabled={running || !rocketrideApiKey}
+          title="Grounded heuristics via a RocketRide Cloud pipeline"
+          onClick={() => void run('rocketride')}
+        >
+          Run on RocketRide
+        </button>
+        <button className="ghost" disabled={running} onClick={() => void run('local')}>
           Run locally
         </button>
       </div>
@@ -114,7 +125,9 @@ export function BenchPanel({ repo, onOpenSettings }: { repo: string; onOpenSetti
                 {report.summary.flagged} flagged
                 {report.runner?.kind === 'daytona'
                   ? ` · sandbox ${report.runner.sandboxId}`
-                  : ' · ran locally'}
+                  : report.runner?.kind === 'rocketride'
+                    ? ' · RocketRide Cloud'
+                    : ' · ran locally'}
               </div>
             </div>
           </div>
