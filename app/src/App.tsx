@@ -153,6 +153,7 @@ export default function App() {
             evolve in realtime across the repos you star — replay them, discuss them, compare models on them.
           </p>
           <nav>
+            <a href="https://youtu.be/-vlYQofbiAk" target="_blank" rel="noreferrer">Watch the explainer</a>
             <a href="https://github.com/oceanseth/OpenSession" target="_blank" rel="noreferrer">GitHub</a>
             <a
               href="https://github.com/oceanseth/OpenSession/blob/main/OPEN-SESSION-LICENSE.md"

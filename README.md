@@ -2,6 +2,13 @@
   <img src="./docs/brand/banner.jpg" alt="OpenSession — Preserve. Share. Build. Together." width="100%">
 </p>
 
+<p align="center">
+  <a href="https://youtu.be/-vlYQofbiAk">
+    <img src="https://img.youtube.com/vi/-vlYQofbiAk/hqdefault.jpg" alt="Watch the OpenSession explainer" width="60%">
+  </a>
+  <br><a href="https://youtu.be/-vlYQofbiAk"><strong>▶ Watch the explainer</strong></a>
+</p>
+
 # OpenSession
 
 **A visualizer and social layer for [Open Session License](./OPEN-SESSION-LICENSE.md) artifacts** — the append-only `llm-turn-history.jsonl` session logs that open-session repos ship alongside their code.
