@@ -2,6 +2,13 @@
   <img src="./docs/brand/banner.jpg" alt="OpenSession — Preserve. Share. Build. Together." width="100%">
 </p>
 
+<p align="center">
+  <a href="https://youtu.be/-vlYQofbiAk">
+    <img src="https://img.youtube.com/vi/-vlYQofbiAk/hqdefault.jpg" alt="Watch the OpenSession explainer" width="60%">
+  </a>
+  <br><a href="https://youtu.be/-vlYQofbiAk"><strong>▶ Watch the explainer</strong></a>
+</p>
+
 # OpenSession
 
 **A visualizer and social layer for [Open Session License](./OPEN-SESSION-LICENSE.md) artifacts** — the append-only `llm-turn-history.jsonl` session logs that open-session repos ship alongside their code.
@@ -18,12 +25,38 @@ Every project built in collaboration with an LLM under the Open Session License 
   - GitHub contributions are shown as the X users who made them.
   - Any user can DM any other linked user on X — powered by [xChatHub](./xChatHub) (an in-page Chrome extension that drives X's own DM client, including E2E-encrypted XChat threads).
 
+## Why session data matters
+
+You don't read code anymore. Most of a project is now written by a model, and the part that carries the *intent* — why a thing exists, what was tried and rejected, the constraint that shaped a decision — lives in the session, not the diff. Delete the session and you keep the artifact but lose the reasoning that produced it.
+
+That reasoning is also the highest-value context for the *next* model. The prompts, tool calls, and dead ends you produced building something last year are exactly what a stronger model would need to rebuild it better today — if you still have them. Right now that context mostly evaporates, or is retained privately by the big model providers and never handed back to you. OpenSession's bet: **keep your session logs, and for open source, share them with the community** — so intent stays legible, work stays reproducible, and the accumulated context of how software gets built with AI belongs to the people building it, not only to the labs.
+
+## Desktop app
+
+[`desktop/`](./desktop) is an Electron app that turns your starred repos' `llm-turn-history.jsonl` logs into a Slack-style workspace and adds a realtime bridge between the people behind the code — **GitHub for what happened, X for who's talking about it.**
+
+- **Sessions as channels.** Each starred repo carrying a history file appears in the sidebar; every declared session is a `#channel`; turns render as a chat stream (speaker, model badge, timestamps, tool-activity). Parsing is shared verbatim with the web app, so both surfaces read archives identically.
+- **Discussion on any turn.** Hover a turn to open a discussion; existing threads show as chips. The right rail hosts the global thread list, a thread's posts with replies and votes, and the composer — a Reddit-style layer anchored to individual turns.
+- **GitHub ⇄ X bridge.** Contributors link their GitHub identity to their X (Twitter) handle, so the humans behind each turn are reachable — realtime visibility into who built what, and direct communication about it between X accounts, without leaving the session.
+- **Live updates.** Polls each followed repo's history file; new turns flash the channel and accrue per-session unseen badges, so an active build reads like a live conversation.
+- **Pre-publish leak scan.** Before you share or reshare a session, [`scan/leakscan.mjs`](./desktop/scan/leakscan.mjs) detects provider-encrypted reasoning envelopes and residual secrets/PII and offers a sanitized copy — the defensive answer to the [stolen-thoughts](https://stolen-thoughts.com/paper.pdf) attack, where encrypted reasoning blocks in public logs were decoded to recover credentials and PII. You can't sanitize what you can't read; OpenSession strips it first.
+- **Turn benchmarks.** Score every turn in a repo (structure integrity, turn stats, a delusion heuristic) locally, in a disposable **Daytona** sandbox for clean-room provenance, or via a **RocketRide** Cloud pipeline whose grounded LLM judge turns a flagged turn into a confirmed/refuted verdict. Reports export as `opensession-bench-report/v0`.
+
+```bash
+cd desktop
+npm install
+npm start        # builds, then launches the Electron app
+```
+
+Roadmap: publishing bench reports to the registry, and **peer-to-peer verification** — your worker benches a peer's flagged sessions against bespoke LoRA-trained models running in the cloud (RocketRide + Daytona), earning priority for your own, BitTorrent-style, with the registry as tracker.
+
 ## Components
 
 | Piece | Role |
 |---|---|
 | [`OPEN-SESSION-LICENSE.md`](./OPEN-SESSION-LICENSE.md) | The license and the `open-session-jsonl` wire format this app visualizes (pulled from [InfiniteMirror](https://github.com/oceanseth/InfiniteMirror)) |
 | [`xChatHub/`](https://github.com/oceanseth/xChatHub) | X DM layer — keyboard-first DM client + WebMCP tools + localhost MCP bridge; the transport for user-to-user messaging |
+| [`desktop/`](./desktop) | Electron desktop app — Slack-style session workspace, turn discussions, live updates, pre-publish leak scanner, and Daytona/RocketRide turn benchmarks |
 | `llm-turn-history.jsonl` | This repo's own session history — OpenSession is itself built under the Open Session License |
 
 ## Development
@@ -93,9 +126,12 @@ and live-polls only *followed* repos for new turns.
 
 ## Status
 
-The live follow feed, starred-repo discovery via the shared registry, GitHub OAuth sign-in,
-and the session visualizer are working. Next up: X identity linking via xChatHub attestation,
-discussion threads, and the evals pipeline.
+Working: the live follow feed, starred-repo discovery via the shared registry, GitHub OAuth
+sign-in, the session visualizer, and the discussion-thread API. The **desktop app** adds the
+Slack-style session workspace, turn-level discussions, live updates, the pre-publish leak
+scanner, and turn benchmarks (local / Daytona / RocketRide). Next up: X identity linking via
+xChatHub attestation across web and desktop, publishing bench reports to the registry, and the
+peer-to-peer verification network.
 
 ## License
 
