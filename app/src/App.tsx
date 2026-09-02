@@ -3,6 +3,7 @@ import './App.css';
 import { Chat } from './components/Chat';
 import { Feed } from './components/Feed';
 import { SessionView } from './components/SessionView';
+import { StarInvite } from './components/StarInvite';
 import { Threads } from './components/Threads';
 import { completeLogin } from './lib/auth';
 import { GitHubClient } from './lib/github';
@@ -13,6 +14,7 @@ import {
   type Identity,
 } from './lib/identity';
 import { parseOpenSessionJsonl, type ParsedArchive } from './lib/opensession';
+import { dismissStarInvite, OPENSESSION_REPO, starInviteDismissed } from './lib/star';
 import { XChatConnector } from './lib/xchat';
 
 type Tab = 'activity' | 'threads' | 'chat';
@@ -34,6 +36,7 @@ export default function App() {
   const [xPromptDismissed, setXPromptDismissed] = useState(
     () => localStorage.getItem(X_PROMPT_DISMISSED_KEY) === '1',
   );
+  const [showStarInvite, setShowStarInvite] = useState(false);
   const client = useMemo(() => new GitHubClient(token || undefined), [token]);
   const identityClient = useMemo(() => (token ? new IdentityClient(token) : null), [token]);
   const connector = useMemo(() => new XChatConnector(), []);
@@ -137,6 +140,29 @@ export default function App() {
       .catch((e) => setLoadError(e instanceof Error ? e.message : String(e)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Signed in but not starring OpenSession → invite them once. Re-checked when
+  // the tab regains focus, so the invite closes itself after they star on
+  // github.com instead of asking again.
+  useEffect(() => {
+    if (!token) {
+      setShowStarInvite(false);
+      return;
+    }
+    if (starInviteDismissed()) return;
+    let cancelled = false;
+    const check = () =>
+      client.isStarred(OPENSESSION_REPO).then((starred) => {
+        if (!cancelled) setShowStarInvite(starred === false);
+      });
+    void check();
+    const onFocus = () => void check();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [client, token]);
 
   const showXPrompt = !!token && identityLoaded && !identity && !xPromptDismissed;
 
@@ -262,6 +288,15 @@ export default function App() {
           />
         )}
       </main>
+
+      {showStarInvite && (
+        <StarInvite
+          onDismiss={() => {
+            setShowStarInvite(false);
+            dismissStarInvite();
+          }}
+        />
+      )}
 
       <footer>
         <p>

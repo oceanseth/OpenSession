@@ -83,6 +83,32 @@ export class GitHubClient {
     return { repos, more: true };
   }
 
+  /**
+   * Is the signed-in user starring this repo? `null` when we can't tell —
+   * signed out, rate-limited, or a token whose scopes don't cover starring.
+   * Callers treat `null` as "don't ask", so a bad answer never nags anyone.
+   */
+  async isStarred(fullName: string): Promise<boolean | null> {
+    if (!this.token) return null;
+    try {
+      const res = await fetch(`${API}/user/starred/${fullName}`, {
+        headers: {
+          Accept: 'application/vnd.github+json',
+          Authorization: `Bearer ${this.token}`,
+        },
+      });
+      if (res.status === 204) return true;
+      if (res.status === 404) return false;
+      // Some tokens can list stars but not query one directly — fall back to
+      // the same starred window the feed already scans.
+      const { repos, more } = await this.starredRepos(1, 3);
+      if (repos.some((r) => r.full_name.toLowerCase() === fullName.toLowerCase())) return true;
+      return more ? null : false; // beyond the scanned window we genuinely don't know
+    } catch {
+      return null;
+    }
+  }
+
   /** Live-probe a repo's history file on its default branch (sha changes = new turns). */
   async probeHistory(fullName: string): Promise<{ sha: string; size: number } | null> {
     try {
