@@ -935,4 +935,5 @@ textarea:focus-visible { outline: none; box-shadow: var(--ring); }
 .modal-foot {
   display: flex;
   justify-content: flex-end;
+  gap: 0.6rem;
 }

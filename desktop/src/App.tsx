@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GitHubClient, type Repo } from '@oslib/github';
 import { parseOpenSessionJsonl, type ParsedArchive } from '@oslib/opensession';
+import { dismissStarInvite, OPENSESSION_REPO, starInviteDismissed } from '@oslib/star';
 import { BenchPanel } from './components/BenchPanel';
 import { LeakScanPanel } from './components/LeakScanPanel';
 import { Login } from './components/Login';
 import { SettingsModal } from './components/SettingsModal';
 import { Sidebar } from './components/Sidebar';
+import { StarInvite } from './components/StarInvite';
 import { ThreadPanel, type ThreadView } from './components/ThreadPanel';
 import { TurnStream } from './components/TurnStream';
 import { markSeen, seenCount, sessionKey } from './lib/seen';
@@ -39,6 +41,7 @@ export default function App() {
   const [scanOpen, setScanOpen] = useState(false);
   const [threadView, setThreadView] = useState<ThreadView | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [showStarInvite, setShowStarInvite] = useState(false);
   const [threadsByRepo, setThreadsByRepo] = useState<Map<string, Thread[]>>(new Map());
   const [flashing, setFlashing] = useState<Set<string>>(new Set());
   const [, bumpSeen] = useState(0); // re-render after markSeen writes
@@ -163,6 +166,29 @@ export default function App() {
     }, POLL_MS);
     return () => clearInterval(timer);
   }, [client, fetchArchive, token]);
+
+  // Signed in but not starring OpenSession → invite them once. Re-checked when
+  // the window regains focus, so the invite closes itself after they star in
+  // the browser instead of asking again.
+  useEffect(() => {
+    if (!token) {
+      setShowStarInvite(false);
+      return;
+    }
+    if (starInviteDismissed()) return;
+    let cancelled = false;
+    const check = () =>
+      client.isStarred(OPENSESSION_REPO).then((starred) => {
+        if (!cancelled) setShowStarInvite(starred === false);
+      });
+    void check();
+    const onFocus = () => void check();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [client, token]);
 
   const openRepo = useCallback(
     (fullName: string) => {
@@ -339,6 +365,14 @@ export default function App() {
         )}
       </div>
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+      {showStarInvite && !settingsOpen && (
+        <StarInvite
+          onDismiss={() => {
+            setShowStarInvite(false);
+            dismissStarInvite();
+          }}
+        />
+      )}
     </div>
   );
 }
