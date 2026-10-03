@@ -1315,3 +1315,82 @@ button.ghost.inline {
     margin-left: 0;
   }
 }
+
+/* ── session search ───────────────────────────────────────────────────── */
+
+.session-search {
+  margin: 0 0 1.2rem;
+}
+
+.session-search input[type='search'] {
+  flex: 1;
+}
+
+.search-status {
+  margin: 0.4rem 0;
+}
+
+.search-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-height: 24rem;
+  overflow-y: auto;
+}
+
+.search-hit {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: var(--card, transparent);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.5rem 0.7rem;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.search-hit:hover {
+  border-color: var(--accent, currentColor);
+}
+
+.search-hit-head {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  flex-wrap: wrap;
+  margin-bottom: 0.25rem;
+}
+
+.search-hit-excerpt {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+}
+
+.search-hit-excerpt mark {
+  background: color-mix(in srgb, var(--accent, #e8b339) 35%, transparent);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0 1px;
+}
+
+/* a turn opened from a search hit */
+.msg.focused {
+  animation: focus-fade 2.5s ease-out;
+  border-radius: 8px;
+}
+
+@keyframes focus-fade {
+  from {
+    background: color-mix(in srgb, var(--accent, #e8b339) 22%, transparent);
+  }
+  to {
+    background: transparent;
+  }
+}

@@ -13,6 +13,8 @@ export function Sidebar({
   unseenBySession,
   flashing,
   threadsClient,
+  searchQuery,
+  onSearch,
   onOpenRepo,
   onSelect,
   onOpenThreads,
@@ -28,6 +30,8 @@ export function Sidebar({
   unseenBySession: Map<string, number>;
   flashing: Set<string>;
   threadsClient: DesktopThreadsClient | null;
+  searchQuery: string;
+  onSearch: (q: string) => void;
   onOpenRepo: (fullName: string) => void;
   onSelect: (s: Selection) => void;
   onOpenThreads: () => void;
@@ -62,6 +66,16 @@ export function Sidebar({
         <span className="wordmark">
           open<span className="accent">session</span>
         </span>
+      </div>
+
+      <div className="sidebar-search">
+        <input
+          type="search"
+          placeholder="Search sessions…"
+          value={searchQuery}
+          onChange={(e) => onSearch(e.target.value)}
+          aria-label="Search sessions"
+        />
       </div>
 
       <div className="sidebar-scroll">

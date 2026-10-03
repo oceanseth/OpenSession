@@ -26,32 +26,43 @@ function excerpt(t: string): string {
 /** Slack-style message stream: turns, their thread chips, and a discuss action. */
 export function TurnStream({
   session,
+  focusTurnId,
   threadsByTurn,
   onOpenThread,
   onDiscuss,
 }: {
   session: ParsedSession;
+  /** Scroll to and highlight this turn instead of jumping to the bottom (search hits). */
+  focusTurnId?: string;
   threadsByTurn: Map<string, Thread[]>;
   onOpenThread: (id: string) => void;
   onDiscuss: (turn: { id: string; ts?: string; speaker?: string; excerpt: string }) => void;
 }) {
   const bottom = useRef<HTMLDivElement>(null);
+  const root = useRef<HTMLDivElement>(null);
   useEffect(() => {
+    if (focusTurnId) {
+      const el = root.current?.querySelector(`[data-turn-id="${CSS.escape(focusTurnId)}"]`);
+      if (el) {
+        el.scrollIntoView({ block: 'center' });
+        return;
+      }
+    }
     bottom.current?.scrollIntoView();
-  }, [session]);
+  }, [session, focusTurnId]);
 
   const discuss = (msg: MessageRecord) =>
     onDiscuss({ id: msg.id, ts: msg.ts, speaker: msg.m, excerpt: excerpt(msg.t) });
 
   return (
-    <div className="turns">
+    <div className="turns" ref={root}>
       {session.messages.map((msg) => {
         const speaker = speakerOf(session, msg);
         const name = speaker?.name ?? msg.m;
         const kind = speaker?.kind ?? 'human';
         const turnThreads = threadsByTurn.get(msg.id) ?? [];
         return (
-          <div key={msg.id} className={`turn ${kind}`}>
+          <div key={msg.id} className={`turn ${kind}${msg.id === focusTurnId ? ' focused' : ''}`} data-turn-id={msg.id}>
             <div className={`avatar ${kind}`}>{initials(name)}</div>
             <div className="turn-body">
               <div className="turn-meta">
