@@ -32,6 +32,22 @@ export interface SessionRecord {
   speakers: Record<string, Speaker>;
 }
 
+/** v0.5: what the turn cost to produce, as metered by the serving harness. */
+export interface TurnUsage {
+  /** Non-cached input tokens (a call's total input is in + cr + cw). */
+  in?: number;
+  /** Output tokens (including any thinking tokens). */
+  out?: number;
+  /** Cache-read input tokens. */
+  cr?: number;
+  /** Cache-write input tokens. */
+  cw?: number;
+  /** Wall-clock duration of the turn, milliseconds. */
+  ms?: number;
+  /** Model id that actually served the turn (may differ from the declared speaker id). */
+  model?: string;
+}
+
 export interface MessageRecord {
   kind: 'message';
   id: string; // ULID (or synthetic for legacy records)
@@ -41,6 +57,8 @@ export interface MessageRecord {
   x?: string; // tool-activity summary (model turns)
   /** v0.4: sid of the session this turn belongs to (beats file-order assignment). */
   s?: string;
+  /** v0.5: per-turn usage (tokens, duration, serving model). */
+  u?: TurnUsage;
   n?: number; // legacy v0.2 monotonic counter
 }
 
@@ -124,6 +142,7 @@ function classify(obj: Record<string, unknown>): OpenSessionRecord {
       ts: obj.ts as string | undefined,
       x: obj.x as string | undefined,
       s: typeof obj.s === 'string' ? obj.s : undefined,
+      u: typeof obj.u === 'object' && obj.u !== null && !Array.isArray(obj.u) ? (obj.u as TurnUsage) : undefined,
       n: typeof obj.n === 'number' ? obj.n : undefined,
     };
   }

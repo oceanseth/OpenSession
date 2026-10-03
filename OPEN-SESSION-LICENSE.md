@@ -1,4 +1,4 @@
-# The Open Session License, v0.5 (draft)
+# The Open Session License, v0.6 (draft)
 
 *Seth Caldwell believes all open source projects that were collaborations with
 LLMs should include a complete, append-only history of the human and machine
@@ -55,7 +55,7 @@ repository, you agree to the following session-transparency conditions:
    the norm; `AGENTS.md` is where each repo turns it into an operative
    instruction the agent actually loads at the start of a session.
 
-## Format (open-session-jsonl v0.3)
+## Format (open-session-jsonl v0.5)
 
 One JSON object per line ([JSON Lines](https://jsonlines.org)):
 
@@ -88,6 +88,22 @@ One JSON object per line ([JSON Lines](https://jsonlines.org)):
   parallel branches merge without reordering. The monotonic `n` of v0.2 is
   removed (it required a shared counter, forced a read to compute, and
   collided on merge); readers MAY still accept `n` on legacy v0.2 archives.
+
+- **Turn usage** (v0.5): a message record MAY carry a `"u"` object recording
+  what the turn cost to produce — the metering the serving harness already
+  knows: `{"in": <input tokens>, "out": <output tokens>, "cr": <cache-read
+  tokens>, "cw": <cache-write tokens>, "ms": <wall-clock duration in
+  milliseconds>, "model": "<model id that served the turn>"}`. Every field is
+  optional; emit what the harness reports and omit the rest. Token counts are
+  summed across all API calls that produced the turn (a logical turn may span
+  several model invocations and tool rounds); `in` counts non-cached input
+  tokens only, so a call's total input is `in + cr + cw`. `model` records the
+  model that actually served the turn and MAY differ from the session
+  record's declared speaker id (fallbacks, mid-session switches). `u` is
+  metadata about the turn, not part of the turn: it is ignored by the
+  `role`/`content` mapping below, and its absence means "not metered," never
+  "free." Human turns normally omit `u`. Aggregating `u` across a session
+  yields the session's token/cost footprint; readers SHOULD surface it.
 
 - **Clean concurrent merges.** The file is append-only and several
   contributors may push in parallel, so an adopting repo SHOULD enable git's
@@ -171,5 +187,9 @@ convertible to open-session by relicensing.
   (2026-08-05) added session ids (`sid`), session `name` labels, and
   per-message session refs (`s`) so parallel and multiagent sessions group
   into distinct channels after union merges — wire format open-session-jsonl
-  v0.4 (v0.3 archives remain valid; `s`-less turns keep file-order grouping).
+  v0.4 (v0.3 archives remain valid; `s`-less turns keep file-order grouping);
+  v0.6 (2026-10-03) added the optional per-turn `u` usage object (token
+  counts, duration, serving model) so archives carry their own cost
+  footprint — wire format open-session-jsonl v0.5 (all earlier archives
+  remain valid; `u` is purely additive).
   Drafted within the session it archives — see the history file itself.

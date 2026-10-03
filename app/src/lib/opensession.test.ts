@@ -53,6 +53,21 @@ describe('parseOpenSessionJsonl', () => {
     expect(parsed.sessions[0].messages.map((m) => m.t)).toEqual(['a', 'b']);
   });
 
+  it('parses v0.5 turn usage and ignores malformed u', () => {
+    const withU = JSON.stringify({
+      id: '01C',
+      m: 'c',
+      t: 'done',
+      ts: '2026-07-24T01:01:00.000Z',
+      u: { in: 2, out: 510, cr: 0, cw: 50305, ms: 4702, model: 'claude-fable-5' },
+    });
+    const badU = JSON.stringify({ id: '01D', m: 'c', t: 'later', ts: '2026-07-24T01:02:00.000Z', u: 'oops' });
+    const parsed = parseOpenSessionJsonl([header, session, withU, badU].join('\n'));
+    const [first, second] = parsed.sessions[0].messages;
+    expect(first.u).toEqual({ in: 2, out: 510, cr: 0, cw: 50305, ms: 4702, model: 'claude-fable-5' });
+    expect(second.u).toBeUndefined();
+  });
+
   it('dedupes by id (union merge)', () => {
     const line = msg('01A', 's', 'once', '2026-07-24T01:00:00.000Z');
     const parsed = parseOpenSessionJsonl([header, session, line, line].join('\n'));

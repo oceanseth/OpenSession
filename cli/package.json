@@ -1,0 +1,16 @@
+{
+  "name": "opensession-cli",
+  "version": "0.1.0",
+  "description": "Mechanical capture for the Open Session License: imports Claude Code / Codex transcripts into llm-turn-history.jsonl (open-session-jsonl v0.5) with token usage.",
+  "type": "module",
+  "bin": {
+    "opensession": "./opensession.mjs"
+  },
+  "scripts": {
+    "test": "node --test test/"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}
