@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GitHubClient, type Repo } from '@oslib/github';
 import { parseOpenSessionJsonl, type ParsedArchive } from '@oslib/opensession';
+import { sessionUsage, usageDetail, usageSummary } from '@oslib/usage';
 import { dismissStarInvite, OPENSESSION_REPO, starInviteDismissed } from '@oslib/star';
 import { BenchPanel } from './components/BenchPanel';
 import { LeakScanPanel } from './components/LeakScanPanel';
@@ -221,6 +222,9 @@ export default function App() {
 
   const selected = selection ? entries.get(selection.repo) : undefined;
   const session = selected?.archive?.sessions[selection?.session ?? 0];
+  const sessionTotals = useMemo(() => (session ? sessionUsage(session) : null), [session]);
+  const sessionTotalsSummary = sessionTotals ? usageSummary(sessionTotals) : null;
+  const sessionTotalsDetail = sessionTotals ? usageDetail(sessionTotals) : undefined;
 
   // Viewing a session marks its turns seen.
   useEffect(() => {
@@ -311,6 +315,11 @@ export default function App() {
                 <span className="channel-sub">
                   {session.messages.length} turns
                   {session.session.tool ? ` · ${session.session.tool}` : ''}
+                  {sessionTotalsSummary && (
+                    <span className="turn-usage" title={sessionTotalsDetail}>
+                      {' '}· ⚡ {sessionTotalsSummary}
+                    </span>
+                  )}
                 </span>
               </div>
               <div className="header-actions">

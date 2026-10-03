@@ -9,6 +9,7 @@ import {
   type ParsedSession,
 } from '../lib/opensession';
 import type { Identity } from '../lib/identity';
+import { archiveUsage, sessionUsage, turnDetail, turnSummary, usageDetail, usageSummary } from '../lib/usage';
 import { ThreadsClient, type Thread } from '../lib/threads';
 import type { XChatConnector } from '../lib/xchat';
 import { DmPopup } from './DmPopup';
@@ -37,6 +38,9 @@ export function SessionView({ title, archive, sourceUrl, token, client, connecto
   const [dmLogin, setDmLogin] = useState<string>();
   const isRepo = /^[\w.-]+\/[\w.-]+$/.test(title);
   const session = archive.sessions[selected];
+  const sessionTotals = useMemo(() => (session ? sessionUsage(session) : null), [session]);
+  const archiveTotals = useMemo(() => archiveUsage(archive), [archive]);
+  const archiveSummary = usageSummary(archiveTotals);
 
   const loadThreads = useCallback(async () => {
     if (!threadsClient || !isRepo) return;
@@ -88,6 +92,11 @@ export function SessionView({ title, archive, sourceUrl, token, client, connecto
             </li>
           ))}
         </ul>
+        {archiveSummary && (
+          <p className="fine usage-total" title={usageDetail(archiveTotals)}>
+            ⚡ {archiveSummary} across all sessions
+          </p>
+        )}
         {archive.errors.length > 0 && (
           <p className="status error slack-errors">
             {archive.errors.length} unparseable line{archive.errors.length > 1 ? 's' : ''}
@@ -108,6 +117,11 @@ export function SessionView({ title, archive, sourceUrl, token, client, connecto
                 <code className="session-sid" title={`session id ${session.session.sid}`}>
                   {session.session.sid.slice(0, 10)}…
                 </code>
+              )}
+              {sessionTotals && usageSummary(sessionTotals) && (
+                <span className="usage-chip" title={usageDetail(sessionTotals)}>
+                  ⚡ {usageSummary(sessionTotals)}
+                </span>
               )}
               <span className="speakers">
                 {Object.entries(session.session.speakers).map(([abbrev, sp]) => (
@@ -189,6 +203,11 @@ function Msg({ session, msg, repo, threadsClient, threads, onThreadCreated, onOp
             <span className={`msg-user ${kind}`}>{name}</span>
           )}
           {msg.ts && <time dateTime={msg.ts}>{formatTs(msg.ts)}</time>}
+          {msg.u && turnSummary(msg.u) && (
+            <span className="turn-usage fine" title={turnDetail(msg.u)}>
+              ⚡ {turnSummary(msg.u)}
+            </span>
+          )}
           <span className="msg-actions">
             {threads.length > 0 && (
               <button

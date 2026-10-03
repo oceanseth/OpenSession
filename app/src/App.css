@@ -1315,3 +1315,27 @@ button.ghost.inline {
     margin-left: 0;
   }
 }
+
+/* ── v0.5 turn-usage (token/cost) chips ───────────────────────────────── */
+
+.usage-chip {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  padding: 0.05em 0.6em;
+  white-space: nowrap;
+  cursor: default;
+}
+
+.turn-usage {
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  white-space: nowrap;
+  cursor: default;
+}
+
+.usage-total {
+  margin: 0.3rem 0.9rem 0.6rem;
+  cursor: default;
+}
