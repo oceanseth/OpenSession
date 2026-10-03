@@ -937,3 +937,11 @@ textarea:focus-visible { outline: none; box-shadow: var(--ring); }
   justify-content: flex-end;
   gap: 0.6rem;
 }
+
+/* v0.5 turn-usage (token/cost) badges */
+.turn-usage {
+  font-size: 0.75rem;
+  color: var(--muted);
+  white-space: nowrap;
+  cursor: default;
+}

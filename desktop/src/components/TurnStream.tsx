@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { speakerOf, type MessageRecord, type ParsedSession } from '@oslib/opensession';
+import { turnDetail, turnSummary } from '@oslib/usage';
 import type { Thread } from '../lib/threads';
 
 function initials(name: string): string {
@@ -58,6 +59,11 @@ export function TurnStream({
                 <span className="speaker">{name}</span>
                 {kind === 'model' && <span className="badge">model</span>}
                 <span className="ts">{fmtTs(msg.ts)}</span>
+                {msg.u && turnSummary(msg.u) && (
+                  <span className="turn-usage" title={turnDetail(msg.u)}>
+                    ⚡ {turnSummary(msg.u)}
+                  </span>
+                )}
                 <button className="discuss-btn" title="Start a discussion on this turn" onClick={() => discuss(msg)}>
                   💬
                 </button>
