@@ -6,6 +6,7 @@ import { BenchPanel } from './components/BenchPanel';
 import { LeakScanPanel } from './components/LeakScanPanel';
 import { Login } from './components/Login';
 import { SettingsModal } from './components/SettingsModal';
+import { SearchPanel } from './components/SearchPanel';
 import { Sidebar } from './components/Sidebar';
 import { StarInvite } from './components/StarInvite';
 import { ThreadPanel, type ThreadView } from './components/ThreadPanel';
@@ -37,6 +38,8 @@ export default function App() {
   const [scanStatus, setScanStatus] = useState<string>();
   const [selection, setSelection] = useState<Selection | null>(null);
   const [mainView, setMainView] = useState<'session' | 'threads'>('session');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [focusTurn, setFocusTurn] = useState<string | null>(null);
   const [benchOpen, setBenchOpen] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
   const [threadView, setThreadView] = useState<ThreadView | null>(null);
@@ -219,6 +222,61 @@ export default function App() {
     [fetchArchive, loadRepoThreads],
   );
 
+  const searching = searchQuery.trim().length >= 2;
+
+  // Session search needs every repo's archive — load the missing ones lazily
+  // on the first real query (the sidebar scan only records shas up front).
+  useEffect(() => {
+    if (!searching) return;
+    const missing = [...entriesRef.current.entries()]
+      .filter(([, e]) => !e.archive && !e.loading && !e.error)
+      .map(([fullName]) => fullName);
+    if (!missing.length) return;
+    setEntries((prev) => {
+      const next = new Map(prev);
+      for (const name of missing) {
+        const e = next.get(name);
+        if (e) next.set(name, { ...e, loading: true });
+      }
+      return next;
+    });
+    let cancelled = false;
+    void (async () => {
+      const CONCURRENCY = 6;
+      let next = 0;
+      await Promise.all(
+        Array.from({ length: CONCURRENCY }, async () => {
+          while (next < missing.length && !cancelled) {
+            const fullName = missing[next++];
+            try {
+              const archive = await fetchArchive(fullName);
+              if (!cancelled) {
+                setEntries((prev) => {
+                  const m = new Map(prev);
+                  const e = m.get(fullName);
+                  if (e) m.set(fullName, { ...e, archive, loading: false });
+                  return m;
+                });
+              }
+            } catch (e) {
+              if (!cancelled) {
+                setEntries((prev) => {
+                  const m = new Map(prev);
+                  const cur = m.get(fullName);
+                  if (cur) m.set(fullName, { ...cur, loading: false, error: e instanceof Error ? e.message : String(e) });
+                  return m;
+                });
+              }
+            }
+          }
+        }),
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [searching, fetchArchive]);
+
   const selected = selection ? entries.get(selection.repo) : undefined;
   const session = selected?.archive?.sessions[selection?.session ?? 0];
 
@@ -284,9 +342,12 @@ export default function App() {
         unseenBySession={unseen.bySession}
         flashing={flashing}
         threadsClient={threadsClient}
+        searchQuery={searchQuery}
+        onSearch={setSearchQuery}
         onOpenRepo={openRepo}
         onSelect={(s) => {
           setMainView('session');
+          setFocusTurn(null);
           setSelection(s);
         }}
         onOpenThreads={() => {
@@ -298,7 +359,28 @@ export default function App() {
         onSignOut={() => saveToken('')}
       />
       <div className="main">
-        {mainView === 'session' && selection && selected?.archive && session ? (
+        {searching ? (
+          <>
+            <header className="channel-header">
+              <div>
+                <h2>Session search</h2>
+                <span className="channel-sub">“{searchQuery.trim()}” across every followed repo</span>
+              </div>
+            </header>
+            <SearchPanel
+              query={searchQuery.trim()}
+              entries={entries}
+              indexing={[...entries.values()].filter((e) => e.loading).length}
+              onOpenHit={(hit) => {
+                setSearchQuery('');
+                setMainView('session');
+                setSelection({ repo: hit.repo, session: hit.sessionIndex });
+                setFocusTurn(hit.turnId);
+                loadRepoThreads(hit.repo);
+              }}
+            />
+          </>
+        ) : mainView === 'session' && selection && selected?.archive && session ? (
           <>
             <header className="channel-header">
               <div>
@@ -339,6 +421,7 @@ export default function App() {
             <div className="content">
               <TurnStream
                 session={session}
+                focusTurnId={focusTurn ?? undefined}
                 threadsByTurn={threadsByTurn}
                 onOpenThread={(id) => setThreadView({ kind: 'detail', id })}
                 onDiscuss={(turn) =>

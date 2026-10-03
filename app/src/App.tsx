@@ -18,7 +18,10 @@ import { dismissStarInvite, OPENSESSION_REPO, starInviteDismissed } from './lib/
 import { XChatConnector } from './lib/xchat';
 
 type Tab = 'activity' | 'threads' | 'chat';
-type View = { name: 'tabs' } | { name: 'session'; title: string; archive: ParsedArchive; sourceUrl?: string };
+type SessionFocus = { sessionIndex: number; turnId: string };
+type View =
+  | { name: 'tabs' }
+  | { name: 'session'; title: string; archive: ParsedArchive; sourceUrl?: string; focus?: SessionFocus };
 
 const TOKEN_KEY = 'opensession.github.token';
 const X_PROMPT_DISMISSED_KEY = 'opensession.xprompt.dismissed';
@@ -103,9 +106,9 @@ export default function App() {
     }
   };
 
-  const openArchive = useCallback((title: string, text: string, sourceUrl?: string) => {
+  const openArchive = useCallback((title: string, text: string, sourceUrl?: string, focus?: SessionFocus) => {
     setLoadError(undefined);
-    setView({ name: 'session', title, archive: parseOpenSessionJsonl(text), sourceUrl });
+    setView({ name: 'session', title, archive: parseOpenSessionJsonl(text), sourceUrl, focus });
   }, []);
 
   const openUrl = useCallback(
@@ -253,7 +256,7 @@ export default function App() {
             client={client}
             token={token}
             onToken={saveToken}
-            onOpenSession={(title, text, sourceUrl) => openArchive(title, text, sourceUrl)}
+            onOpenSession={(title, text, sourceUrl, focus) => openArchive(title, text, sourceUrl, focus)}
             onOpenUrl={openUrl}
             loadError={loadError}
           />
@@ -275,6 +278,7 @@ export default function App() {
             title={view.title}
             archive={view.archive}
             sourceUrl={view.sourceUrl}
+            focus={view.focus}
             token={token || undefined}
             client={client}
             connector={connector}

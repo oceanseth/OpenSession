@@ -3,6 +3,7 @@ import { OAUTH_CLIENT_ID, beginLogin } from '../lib/auth';
 import { GitHubClient, type HistoryCommit, type Repo } from '../lib/github';
 import { fetchHistory, loadCache, saveCache } from '../lib/history-cache';
 import { RegistryClient, parseRepoInput, type RegistryRepo } from '../lib/registry';
+import { SessionSearch, type SearchFocus } from './SessionSearch';
 
 const POLL_MS = 60_000;
 const SCAN_PAGES = 10; // 1000 newest stars per scan pass
@@ -11,7 +12,7 @@ interface FeedProps {
   client: GitHubClient;
   token: string;
   onToken: (t: string) => void;
-  onOpenSession: (title: string, text: string, sourceUrl?: string) => void;
+  onOpenSession: (title: string, text: string, sourceUrl?: string, focus?: SearchFocus) => void;
   onOpenUrl: (url: string) => void;
   loadError?: string;
 }
@@ -297,6 +298,11 @@ export function Feed({ client, token, onToken, onOpenSession, onOpenUrl, loadErr
 
       {login && (
         <>
+          <SessionSearch
+            client={client}
+            repos={[...follows, ...active.values()]}
+            onOpen={(title, text, sourceUrl, focus) => onOpenSession(title, text, sourceUrl, focus)}
+          />
           <h2 className="section-title">Following</h2>
           {follows.length === 0 && (
             <p className="status">Not following anything yet — pick repos below or add one by name.</p>

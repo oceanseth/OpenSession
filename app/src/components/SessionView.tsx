@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { GitHubClient } from '../lib/github';
 import { hasBrowserLlm, suggestThreadTitle } from '../lib/llm';
 import {
@@ -17,6 +17,8 @@ interface SessionViewProps {
   title: string; // owner/repo when opened from the feed or a github URL
   archive: ParsedArchive;
   sourceUrl?: string;
+  /** Open at this session and scroll to this turn (e.g. from a search hit). */
+  focus?: { sessionIndex: number; turnId: string };
   token?: string;
   client: GitHubClient;
   connector: XChatConnector;
@@ -30,10 +32,14 @@ interface SessionViewProps {
  * selected session's turns as a chat transcript on the right, clickable
  * speaker names opening a quick-DM popup.
  */
-export function SessionView({ title, archive, sourceUrl, token, client, connector, myIdentity, onBack, onOpenThread }: SessionViewProps) {
+export function SessionView({ title, archive, sourceUrl, focus, token, client, connector, myIdentity, onBack, onOpenThread }: SessionViewProps) {
   const threadsClient = useMemo(() => (token ? new ThreadsClient(token) : null), [token]);
   const [threadsByTurn, setThreadsByTurn] = useState<Map<string, Thread[]>>(new Map());
-  const [selected, setSelected] = useState(() => Math.max(0, archive.sessions.length - 1));
+  const [selected, setSelected] = useState(() =>
+    focus && focus.sessionIndex < archive.sessions.length
+      ? focus.sessionIndex
+      : Math.max(0, archive.sessions.length - 1),
+  );
   const [dmLogin, setDmLogin] = useState<string>();
   const isRepo = /^[\w.-]+\/[\w.-]+$/.test(title);
   const session = archive.sessions[selected];
@@ -124,6 +130,7 @@ export function SessionView({ title, archive, sourceUrl, token, client, connecto
                   key={m.id}
                   session={session}
                   msg={m}
+                  focused={focus?.turnId === m.id}
                   repo={isRepo ? title : undefined}
                   threadsClient={threadsClient}
                   threads={threadsByTurn.get(m.id) ?? []}
@@ -157,6 +164,7 @@ export function SessionView({ title, archive, sourceUrl, token, client, connecto
 interface MsgProps {
   session: ParsedSession;
   msg: MessageRecord;
+  focused?: boolean;
   repo?: string;
   threadsClient: ThreadsClient | null;
   threads: Thread[];
@@ -165,9 +173,13 @@ interface MsgProps {
   onOpenDm?: (login: string) => void;
 }
 
-function Msg({ session, msg, repo, threadsClient, threads, onThreadCreated, onOpenThread, onOpenDm }: MsgProps) {
+function Msg({ session, msg, focused, repo, threadsClient, threads, onThreadCreated, onOpenThread, onOpenDm }: MsgProps) {
   const [expanded, setExpanded] = useState(false);
   const [discussing, setDiscussing] = useState(false);
+  const selfRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (focused) selfRef.current?.scrollIntoView({ block: 'center' });
+  }, [focused]);
   const speaker = speakerOf(session, msg);
   const kind = speaker?.kind ?? 'human';
   const name = speaker?.name ?? msg.m;
@@ -177,7 +189,7 @@ function Msg({ session, msg, repo, threadsClient, threads, onThreadCreated, onOp
   const canDiscuss = !!threadsClient && !!repo;
 
   return (
-    <div className="msg">
+    <div className={focused ? 'msg focused' : 'msg'} ref={selfRef}>
       <div className={`msg-avatar ${kind}`}>{name.slice(0, 1).toUpperCase()}</div>
       <div className="msg-body">
         <div className="msg-head">
