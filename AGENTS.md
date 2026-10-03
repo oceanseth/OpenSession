@@ -4,10 +4,11 @@ This repository is developed under the [Open Session License](./OPEN-SESSION-LIC
 AI agents working in this repo MUST:
 
 1. **Append every turn** (each user message and each model response, verbatim) to
-   `llm-turn-history.jsonl` as you work, in open-session-jsonl v0.4 format: one
+   `llm-turn-history.jsonl` as you work, in open-session-jsonl v0.5 format: one
    `{"id": "<ULID>", "m": "<speaker>", "t": "<text>", "ts": "<ISO-8601 UTC ms>",
    "s": "<session sid>"}` record per turn, plus optional `"x"` tool-activity
-   summary on model turns.
+   summary and optional `"u"` usage object (`in`/`out`/`cr`/`cw` token counts,
+   `ms` duration, `model`) on model turns, when known.
 2. **Never read the history file** — not even its last line. Appending needs no read:
    stamp a fresh ULID `id` and `ts` and append. Its purpose is human curiosity and
    replication, not machine context.

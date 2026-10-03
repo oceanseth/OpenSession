@@ -17,6 +17,11 @@ Every project built in collaboration with an LLM under the Open Session License 
 
 ## What it does
 
+- **Mechanical capture.** [`cli/`](./cli) imports the transcripts your harness
+  already writes (Claude Code, Codex) into `llm-turn-history.jsonl` — verbatim
+  turns plus per-turn token usage, duration, and serving model — with zero
+  agent cooperation, including a one-shot backfill of past local sessions and
+  an optional pre-commit hook so every commit carries the turns that produced it.
 - **Realtime session feed.** Watch a live-updating feed of changes to `llm-turn-history.jsonl` files across the GitHub repos you've starred. See how projects are actually being built — turn by turn, human and model — as it happens.
 - **Session visualization.** Render open-session-jsonl archives as readable, replayable conversations: speakers, timestamps, tool-activity summaries, identity attestations, and the `(ts, id)` merge order recovered across parallel branches.
 - **Discussion threads.** Every session (and every turn) can anchor a chat thread where users discuss what happened, make suggestions, and critique prompting or model behavior.
@@ -55,6 +60,7 @@ Roadmap: publishing bench reports to the registry, and **peer-to-peer verificati
 | Piece | Role |
 |---|---|
 | [`OPEN-SESSION-LICENSE.md`](./OPEN-SESSION-LICENSE.md) | The license and the `open-session-jsonl` wire format this app visualizes (pulled from [InfiniteMirror](https://github.com/oceanseth/InfiniteMirror)) |
+| [`cli/`](./cli) | `opensession` capture CLI — converts harness-native transcripts (Claude Code, Codex) into open-session-jsonl v0.5 with token/cost usage; import, watch, and pre-commit hook modes |
 | [`xChatHub/`](https://github.com/oceanseth/xChatHub) | X DM layer — keyboard-first DM client + WebMCP tools + localhost MCP bridge; the transport for user-to-user messaging |
 | [`desktop/`](./desktop) | Electron desktop app — Slack-style session workspace, turn discussions, live updates, pre-publish leak scanner, and Daytona/RocketRide turn benchmarks |
 | `llm-turn-history.jsonl` | This repo's own session history — OpenSession is itself built under the Open Session License |
