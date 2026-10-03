@@ -196,7 +196,11 @@ export function installHook(repoDir, cliPath) {
   return 'appended';
 }
 
-export const QUIESCE_MS_DEFAULT = 5 * 60 * 1000;
+// A single long model API call can keep the transcript silent for many
+// minutes while a turn is still growing; flushing the open tail during that
+// silence would freeze a partial turn under its final id. 15 minutes
+// comfortably outlasts even long-horizon calls.
+export const QUIESCE_MS_DEFAULT = 15 * 60 * 1000;
 
 /**
  * One import pass over a set of transcripts for one adapter.

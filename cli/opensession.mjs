@@ -12,7 +12,7 @@
  *   opensession watch   [--repo DIR] [--interval S]  keep importing as sessions progress
  *
  * Common flags: --harness claude-code|codex|all (default all), --dry-run,
- * --quiesce S (default 300: seconds a transcript must be quiet before its
+ * --quiesce S (default 900: seconds a transcript must be quiet before its
  * trailing, still-open model turn is flushed), --human NAME, --label LABEL,
  * --quiet, --full (ignore saved watermarks; deterministic ids keep readers
  * dedupe-safe either way).
@@ -78,7 +78,7 @@ function log(args, msg) {
 function runImport(repoDir, args) {
   const state = args.full ? { files: {} } : loadState(repoDir);
   const opts = {
-    quiesceMs: (Number(args.quiesce) || 300) * 1000,
+    quiesceMs: (Number(args.quiesce) || 900) * 1000,
     dryRun: Boolean(args['dry-run']),
     human: args.human ?? humanName(repoDir),
     label: args.label,

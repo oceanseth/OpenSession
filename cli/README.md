@@ -24,7 +24,7 @@ node cli/opensession.mjs watch  --repo /path/to/repo          # keep importing l
 | `watch` | Polls transcripts (default every 15 s) and appends turns as sessions progress |
 
 Flags: `--harness claude-code|codex|all` (default `all`) · `--dry-run` ·
-`--full` (ignore watermarks and rescan) · `--quiesce S` (default 300) ·
+`--full` (ignore watermarks and rescan) · `--quiesce S` (default 900) ·
 `--human NAME` (speaker name, default git `user.name`) · `--label LABEL`
 (session `name`) · `--transcript FILE` (import one specific transcript) ·
 `--quiet`.
@@ -54,8 +54,9 @@ A logical turn spans all API calls and tool rounds between two human messages.
   `.git/opensession-state.json`, never committed) makes normal runs exact-once.
 - **No frozen partial turns.** A still-open trailing model turn is held back
   until a following human turn closes it or the transcript has been quiet for
-  `--quiesce` seconds — its id derives from its first record, so emitting early
-  would freeze a partial turn forever.
+  `--quiesce` seconds (default 15 min — longer than even a long-horizon model
+  API call stays silent) — its id derives from its first record, so emitting
+  early would freeze a partial turn forever.
 - **Session identity survives.** Each harness session becomes one
   open-session session record (deterministic `sid`); every turn carries
   `"s": sid`, so parallel sessions stay separable after union merges.
